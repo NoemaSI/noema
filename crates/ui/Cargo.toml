@@ -1,0 +1,8 @@
+[package]
+name = "ui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+client = { version = "0.1.0", path = "../client" }
+gpui-kit = "0.6.0"

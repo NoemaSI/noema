@@ -1,0 +1,145 @@
+Yes — **your diagnosis is correct**, and my previous answer was wrong.
+	
+`WhiteSpace::Normal` is already the default, so adding `text_wrap()` / `white_space()` isn't the solution. The text only wraps once its layout gets a **bounded width**.
+
+The important thing in your code is the constraint chain:
+
+```text
+WorkspaceScreen
+  └─ flex row
+      ├─ sidebar: 240px
+      └─ main: flex_1
+          └─ Chat
+              └─ messages
+                  └─ message
+                      └─ text
+```
+
+The problematic part is that the flex item's automatic minimum width can be based on the intrinsic width of the unwrapped text. Therefore the item refuses to shrink enough for the text to ever see a smaller width.
+
+You already added:
+
+```rust
+div()
+    .flex_1()
+    .min_w_0()
+```
+
+to the **main content**, which is correct.
+
+But you need to propagate that constraint through the **Chat flex hierarchy** as well.
+
+I'd make the three levels explicit:
+
+```rust
+// Workspace main content
+div()
+    .flex_1()
+    .min_w_0()
+    .h_full()
+    .p(px(30.0))
+    .text_color(rgb(0xffffff))
+    .child(self.chat.clone())
+```
+
+```rust
+// Chat
+div()
+    .flex()
+    .flex_col()
+    .min_w_0()
+    .w_full()
+    .h_full()
+    .overflow_scrollbar()
+    .child(self.render_messages(&self.messages, cx))
+```
+
+```rust
+// Messages
+div()
+    .flex()
+    .flex_col()
+    .min_w_0()
+    .w_full()
+    .gap(px(8.0))
+    .children(messages.iter().map(|msg| match msg {
+        ChatMessage::UserQuery(message) => {
+            self.render_user_message(message, cx).into_any_element()
+        }
+    }))
+```
+
+And the message itself:
+
+```rust
+div()
+    .w_full()
+    .bg(bg_fill)
+    .py_4()
+    .px_6()
+    .rounded(px(12.0))
+    .child(message.content.clone())
+```
+
+### One particularly important detail
+
+Your `Chat` currently does:
+
+```rust
+div()
+    .flex()
+    .flex_col()
+```
+
+That makes it a flex container, but **`min_w_0()` wasn't there**.
+
+So your current chain is effectively:
+
+```text
+main
+  min-width: 0          ← fixed
+
+  Chat
+    min-width: auto      ← can still be intrinsic content width
+
+    messages
+      min-width: auto    ← can still be intrinsic content width
+
+      message
+        width: 100%
+```
+
+That can still produce exactly what you're seeing.
+
+So try **just this first**:
+
+```rust
+div()
+    .flex()
+    .flex_col()
+    .min_w_0()
+    .w_full()
+    .h_full()
+    .overflow_scrollbar()
+    .child(self.render_messages(&self.messages, cx))
+```
+
+and:
+
+```rust
+div()
+    .flex()
+    .flex_col()
+    .min_w_0()
+    .w_full()
+    .gap(px(8.0))
+    .children(...)
+```
+
+You **do not need** `white_space`, `text_wrap`, manual newlines, or a special text element.
+
+The key is:
+
+> **Every flex item between the bounded outer width and the text needs to be allowed to shrink with `min_w_0()`.**
+
+If it *still* doesn't wrap after those two additions, the next thing I'd inspect is `overflow_scrollbar()` itself, because that becomes the next likely source of the width constraint behavior.

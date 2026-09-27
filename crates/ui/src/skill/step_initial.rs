@@ -6,6 +6,7 @@ use super::create_skill_view::CreateSkillView;
 use super::wizard::{RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::TEXT_SM;
+use crate::skill::wizard::INITIAL_ROLE_DRAFT;
 
 /// Landing state: nothing interacted with yet.
 pub struct InitialStep;
@@ -20,13 +21,7 @@ impl WizardStep for InitialStep {
     }
 
     fn nodes(&self) -> Vec<RoleState> {
-        vec![
-            RoleState::Draft("intake"),
-            RoleState::Draft("\u{2026}"),
-            RoleState::Draft("\u{2026}"),
-            RoleState::Draft("validate"),
-            RoleState::Draft("deliver"),
-        ]
+        INITIAL_ROLE_DRAFT.to_vec()
     }
 
     fn title(&self, _view: &CreateSkillView, _cx: &App) -> String {

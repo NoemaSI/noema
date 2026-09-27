@@ -5,6 +5,7 @@ use gpui_kit::*;
 use super::create_skill_view::CreateSkillView;
 use super::wizard::{define_form_fields, RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
+use crate::skill::wizard::INITIAL_ROLE_DRAFT;
 
 /// "New Skill" clicked: the user states goal & acceptance criteria.
 pub struct DefineSkillStep;
@@ -19,13 +20,7 @@ impl WizardStep for DefineSkillStep {
     }
 
     fn nodes(&self) -> Vec<RoleState> {
-        vec![
-            RoleState::Defined("QC"),
-            RoleState::Defined("FIT"),
-            RoleState::Defined("KIN"),
-            RoleState::Defined("VAL"),
-            RoleState::Defined("RPT"),
-        ]
+        INITIAL_ROLE_DRAFT.to_vec()
     }
 
     fn title(&self, _view: &CreateSkillView, _cx: &App) -> String {

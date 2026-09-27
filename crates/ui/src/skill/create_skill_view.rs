@@ -9,12 +9,19 @@ use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::{FONT_FAMILY, TEXT_SM};
 
+pub struct SkillDraft {
+    pub name: String,
+    pub created: String,
+    pub status: &'static str,
+}
+
 pub struct CreateSkillView {
     active_tab: usize,
     phase: WizardPhase,
     pub(crate) name_input: Entity<InputState>,
     pub(crate) goal_input: Entity<TextareaState>,
     pub(crate) acceptance: Vec<String>,
+    pub(crate) drafts: Vec<SkillDraft>,
 }
 
 impl CreateSkillView {
@@ -29,6 +36,7 @@ impl CreateSkillView {
                     .rows(3)
             }),
             acceptance: Vec::new(),
+            drafts: Vec::new(),
         }
     }
 
@@ -54,9 +62,73 @@ impl CreateSkillView {
     fn render_tab_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_tab {
             0 => self.render_my_skills(cx).into_any_element(),
-            1 => div().child("SKILL TEMPLATES").into_any_element(),
+            1 => self.render_skill_drafts(cx).into_any_element(),
             _ => div().child("Unknown content").into_any_element(),
         }
+    }
+
+    fn render_skill_drafts(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().clone();
+        let empty = self.drafts.is_empty();
+        div()
+            .size_full()
+            .p_4()
+            .bg(theme.background)
+            .child(
+                v_flex()
+                    .w_full()
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded(px(4.))
+                    .bg(theme.secondary)
+                    .font_family(FONT_FAMILY)
+                    .text_size(TEXT_SM)
+                    .child(
+                        h_flex()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .bg(theme.overlay)
+                            .text_size(px(10.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted_foreground)
+                            .child(div().flex_1().child("DRAFT NAME"))
+                            .child(div().w(px(140.)).child("CREATED"))
+                            .child(div().w(px(120.)).child("STATUS")),
+                    )
+                    .when(empty, |table| {
+                        table.child(
+                            v_flex()
+                                .items_center()
+                                .justify_center()
+                                .gap_y_1()
+                                .py_12()
+                                .text_color(theme.muted_foreground)
+                                .child("No drafts yet")
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .child("Save a draft from the wizard and it will appear here."),
+                                ),
+                        )
+                    })
+                    .children(self.drafts.iter().map(|draft| {
+                        h_flex()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(div().flex_1().child(draft.name.clone()))
+                            .child(
+                                div()
+                                    .w(px(140.))
+                                    .text_color(theme.muted_foreground)
+                                    .child(draft.created.clone()),
+                            )
+                            .child(div().w(px(120.)).child(draft.status))
+                    })),
+            )
     }
 
     fn render_my_skills(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

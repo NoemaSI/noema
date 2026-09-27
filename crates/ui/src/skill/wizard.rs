@@ -10,6 +10,15 @@ use super::step_initial::InitialStep;
 use super::step_intent_analysis::IntentAnalysisStep;
 use crate::TEXT_SM;
 
+pub const INITIAL_ROLE_DRAFT: &[RoleState] = &[
+    RoleState::Draft("intake"),
+    RoleState::Draft("…"),
+    RoleState::Draft("…"),
+    RoleState::Draft("validate"),
+    RoleState::Draft("deliver"),
+];
+
+
 /// The create-skill wizard walks the user through up to ten phases.
 /// Implemented so far: Initial, DefineSkill, IntentAnalysis.
 /// Planned: AttachData, Inspect, ReviewPlan, Train, Validate, Certify, Done.
@@ -24,6 +33,7 @@ pub enum WizardPhase {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub enum RoleState {
     Draft(&'static str),
     Defined(&'static str),

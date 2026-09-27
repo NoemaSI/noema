@@ -1,6 +1,8 @@
 mod not_logged_in;
 mod route;
 mod workspace;
+mod world;
+mod market;
 
 use std::borrow::Cow;
 
@@ -26,6 +28,10 @@ static IOSKELEY_SEMIBOLD: &[u8] =
     include_bytes!("../../../assets/fonts/ioskeley/IoskeleyMono-SemiBold.ttf");
 
 pub const FONT_FAMILY: &str = "Ioskeley Mono";
+
+pub const TEXT_SM: Pixels = px(13.0);
+pub const TEXT_BASE: Pixels = px(14.0);
+pub const TEXT_LG: Pixels = px(16.0);
 
 struct AppRoot {
     route: Route,

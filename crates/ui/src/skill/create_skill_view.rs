@@ -1,5 +1,5 @@
 use gpui_kit::base::{h_flex, v_flex, StyledExt};
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::gpui::prelude::FluentBuilder;
@@ -13,7 +13,7 @@ pub struct CreateSkillView {
     active_tab: usize,
     phase: WizardPhase,
     pub(crate) name_input: Entity<InputState>,
-    pub(crate) goal_input: Entity<InputState>,
+    pub(crate) goal_input: Entity<TextareaState>,
     pub(crate) acceptance: Vec<String>,
 }
 
@@ -24,7 +24,9 @@ impl CreateSkillView {
             phase: WizardPhase::Initial,
             name_input: cx.new(|cx| InputState::new(window, cx).placeholder("unnamed")),
             goal_input: cx.new(|cx| {
-                InputState::new(window, cx).placeholder("what should this skill do, in plain words?")
+                TextareaState::new(window, cx)
+                    .placeholder("what should this skill do, in plain words?")
+                    .rows(3)
             }),
             acceptance: Vec::new(),
         }
@@ -203,7 +205,7 @@ impl Render for CreateSkillView {
                         cx.notify();
                     }))
                     .child(Tab::new().label("MY SKILLS"))
-                    .child(Tab::new().label("SKILL TEMPLATES")),
+                    .child(Tab::new().label("SKILL DRAFTS")),
             )
             .child(
                 div()

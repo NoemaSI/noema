@@ -1,5 +1,5 @@
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::Theme;
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -196,7 +196,7 @@ pub fn training_path(theme: &Theme, active: Option<usize>) -> impl IntoElement {
         ("6 \u{b7} Certify", "capability certified \u{2014} artifacts kept & callable"),
     ];
     v_flex()
-        .w(px(320.))
+        .w(px(340.))
         .flex_none()
         .gap_y_3()
         .p_3()
@@ -231,6 +231,8 @@ pub fn training_path(theme: &Theme, active: Option<usize>) -> impl IntoElement {
                 )
                 .child(
                     v_flex()
+                        .flex_1()
+                        .min_w_0()
                         .gap_0p5()
                         .child(
                             div()
@@ -315,7 +317,7 @@ pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool)
             v_flex()
                 .gap_y_1()
                 .child(form_label("GOAL (PLAIN LANGUAGE)", theme))
-                .child(Input::new(&view.goal_input).w_full().h(px(36.))),
+                .child(Textarea::new(&view.goal_input).w_full().h(px(76.))),
         )
         .child(
             v_flex()

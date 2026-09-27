@@ -82,6 +82,7 @@ impl CreateSkillView {
                 h_flex()
                     .gap_x_2()
                     .items_center()
+                    .mb_2()
                     .text_size(TEXT_SM)
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("\u{25c2} New skill \u{2014} unnamed")
@@ -100,7 +101,7 @@ impl CreateSkillView {
             .child(
                 h_flex()
                     .gap_x_4()
-                    .items_start()
+                    .items_stretch()
                     .child(Self::render_role_circle(&theme, &self.nodes))
                     .child(Self::render_skill_state(&theme))
                     .child(Self::render_training_path(&theme)),
@@ -108,6 +109,7 @@ impl CreateSkillView {
             .child(
                 div()
                     .max_w(px(520.))
+                    .mt_4()
                     .text_size(TEXT_SM)
                     .text_color(theme.muted_foreground)
                     .child(
@@ -234,7 +236,6 @@ impl CreateSkillView {
             .p_3()
             .border_1()
             .border_color(theme.border)
-            .border_dashed()
             .rounded(px(4.))
             .text_size(TEXT_SM)
             .child(

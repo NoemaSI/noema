@@ -123,6 +123,16 @@ impl CreateSkillView {
 
     fn render_skill_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        let title = if self.phase == WizardPhase::IntentAnalysis {
+            let name = self.name_input.read(cx).value().to_string();
+            if name.is_empty() {
+                "\u{25c2} New skill \u{2014} unnamed".to_string()
+            } else {
+                format!("\u{25c2} New skill \u{2014} \u{201c}{name}\u{201d}")
+            }
+        } else {
+            "\u{25c2} New skill \u{2014} unnamed".to_string()
+        };
         v_flex()
             .flex_1()
             .gap_y_4()
@@ -139,7 +149,7 @@ impl CreateSkillView {
                     .mb_2()
                     .text_size(TEXT_SM)
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("\u{25c2} New skill \u{2014} unnamed")
+                    .child(title)
                     .when(self.phase == WizardPhase::Initial, |row| {
                         row.child(
                             div()
@@ -195,12 +205,31 @@ impl CreateSkillView {
     }
 
     fn render_define_form(&self, theme: &Theme, _cx: &mut Context<Self>) -> impl IntoElement {
+        let analysed = self.phase == WizardPhase::IntentAnalysis;
+        let suggested: [&'static str; 3] = [
+            "fit converges",
+            "validated on held-out runs",
+            "report cites CIs",
+        ];
         v_flex()
             .gap_y_3()
             .child(
                 v_flex()
                     .gap_y_1()
-                    .child(Self::form_label("SKILL NAME", theme))
+                    .child(
+                        h_flex()
+                            .gap_x_2()
+                            .items_center()
+                            .child(Self::form_label("SKILL NAME", theme))
+                            .when(analysed, |row| {
+                                row.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(theme.primary_foreground)
+                                        .child("\u{25c6} refined by agent"),
+                                )
+                            }),
+                    )
                     .child(Input::new(&self.name_input).w_full().h(px(36.))),
             )
             .child(
@@ -212,15 +241,34 @@ impl CreateSkillView {
             .child(
                 v_flex()
                     .gap_y_1()
-                    .child(Self::form_label(
-                        "WHAT COUNTS AS DONE (ACCEPTANCE CRITERIA)",
-                        theme,
-                    ))
                     .child(
                         h_flex()
                             .gap_x_2()
                             .items_center()
-                            .when(self.acceptance.is_empty(), |row| {
+                            .child(Self::form_label(
+                                if analysed {
+                                    "ACCEPTANCE CRITERIA"
+                                } else {
+                                    "WHAT COUNTS AS DONE (ACCEPTANCE CRITERIA)"
+                                },
+                                theme,
+                            ))
+                            .when(analysed, |row| {
+                                row.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(theme.primary_foreground)
+                                        .child(
+                                            "\u{25c6} proposed by agent \u{2014} accept or edit",
+                                        ),
+                                )
+                            }),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_x_2()
+                            .items_center()
+                            .when(!analysed && self.acceptance.is_empty(), |row| {
                                 row.child(
                                     div()
                                         .px_2()
@@ -233,17 +281,33 @@ impl CreateSkillView {
                                         .child("agent will suggest\u{2026}"),
                                 )
                             })
-                            .children(self.acceptance.iter().map(|criterion| {
-                                div()
-                                    .px_2()
-                                    .py_0p5()
-                                    .border_1()
-                                    .border_color(theme.border)
-                                    .rounded_full()
-                                    .text_size(px(10.))
-                                    .text_color(theme.foreground)
-                                    .child(criterion.clone())
-                            }))
+                            .when(analysed, |row| {
+                                row.children(suggested.iter().map(|criterion| {
+                                    div()
+                                        .cursor_pointer()
+                                        .px_2()
+                                        .py_0p5()
+                                        .border_1()
+                                        .border_color(theme.ring)
+                                        .rounded_full()
+                                        .text_size(px(10.))
+                                        .text_color(theme.primary_foreground)
+                                        .child(format!("{criterion} \u{2713} accept"))
+                                }))
+                            })
+                            .when(!analysed, |row| {
+                                row.children(self.acceptance.iter().map(|criterion| {
+                                    div()
+                                        .px_2()
+                                        .py_0p5()
+                                        .border_1()
+                                        .border_color(theme.border)
+                                        .rounded_full()
+                                        .text_size(px(10.))
+                                        .text_color(theme.foreground)
+                                        .child(criterion.clone())
+                                }))
+                            })
                             .child(
                                 div()
                                     .cursor_pointer()
@@ -254,19 +318,81 @@ impl CreateSkillView {
                                     .rounded_full()
                                     .text_size(px(10.))
                                     .text_color(theme.primary_foreground)
-                                    .child("+ add yourself"),
+                                    .child(if analysed {
+                                        "+ add"
+                                    } else {
+                                        "+ add yourself"
+                                    }),
                             ),
                     ),
             )
+            .when(!analysed, |form| {
+                form.child(
+                    div()
+                        .max_w(px(720.))
+                        .text_size(px(10.))
+                        .text_color(theme.muted_foreground)
+                        .child(
+                            "The agent will read name & goal, match a template, propose acceptance criteria and resolve the method band \u{2014} you review and correct everything in the next step.",
+                        ),
+                )
+            })
+            .when(analysed, |form| {
+                form.child(Self::render_analysis_box(theme))
+            })
+    }
+
+    fn render_analysis_box(theme: &Theme) -> impl IntoElement {
+        fn row(prefix: &'static str, content: &'static str, link: &'static str, theme: &Theme) -> Div {
+            h_flex()
+                .gap_x_1()
+                .text_size(px(10.))
+                .child(div().text_color(theme.muted_foreground).child(prefix))
+                .child(div().text_color(theme.foreground).child(content))
+                .child(
+                    div()
+                        .cursor_pointer()
+                        .text_color(theme.primary_foreground)
+                        .child(format!("[{link}]")),
+                )
+        }
+        v_flex()
+            .gap_y_1()
+            .p_3()
+            .border_1()
+            .border_color(theme.border)
+            .rounded(px(4.))
             .child(
                 div()
-                    .max_w(px(720.))
                     .text_size(px(10.))
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
-                    .child(
-                        "The agent will read name & goal, match a template, propose acceptance criteria and resolve the method band \u{2014} you review and correct everything in the next step.",
-                    ),
+                    .child("AGENT ANALYSED THIS AS \u{2014} REVIEW & CONFIRM"),
             )
+            .child(row(
+                "task type:",
+                "protein\u{2013}ligand binding kinetics (SPR) \u{b7} template: Binding kinetics \u{25b8}",
+                "swap template",
+                theme,
+            ))
+            .child(row(
+                "expected outputs:",
+                "Kd/IC50 curves \u{b7} kon/koff \u{b7} report + model card",
+                "edit",
+                theme,
+            ))
+            .child(row(
+                "required data:",
+                "sensorgram CSV \u{b7} run metadata",
+                "adjust",
+                theme,
+            ))
+            .child(row(
+                "method band resolved:",
+                "2 methods \u{2794} FIT \u{b7} KIN \u{2192} wheel becomes QC \u{b7} FIT \u{b7} KIN \u{b7} VAL \u{b7} RPT",
+                "swap template to rename",
+                theme,
+            ))
     }
 
     fn form_label(text: &'static str, theme: &Theme) -> Div {
@@ -301,7 +427,7 @@ impl CreateSkillView {
                     cx,
                 ))
                 .into_any_element(),
-            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => h_flex()
+            WizardPhase::DefineSkill => h_flex()
                 .gap_x_2()
                 .child(sbutton_auto(
                     "cancel",
@@ -314,6 +440,22 @@ impl CreateSkillView {
                     "analyze-intent",
                     "Analyze intent",
                     self.goto(WizardPhase::IntentAnalysis, cx),
+                    cx,
+                ))
+                .into_any_element(),
+            WizardPhase::IntentAnalysis => h_flex()
+                .gap_x_2()
+                .child(sbutton_auto(
+                    "back-raw",
+                    "\u{25c2} back to raw input",
+                    self.goto(WizardPhase::DefineSkill, cx),
+                    cx,
+                ))
+                .child(sbutton_auto("save-draft", "Save draft", |_, _, _| {}, cx))
+                .child(pbutton_auto(
+                    "confirm-attach",
+                    "Confirm & attach data",
+                    |_, _, _| {},
                     cx,
                 ))
                 .into_any_element(),
@@ -425,7 +567,7 @@ impl CreateSkillView {
                 .child("the method band between them is the template's choice \u{2014}")
                 .child("its node count and names appear once a template is picked.")
                 .into_any_element(),
-            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => box_
+            WizardPhase::DefineSkill => box_
                 .child(
                     h_flex()
                         .gap_x_6()
@@ -438,6 +580,22 @@ impl CreateSkillView {
                             div()
                                 .text_color(theme.muted_foreground)
                                 .child("goal stated \u{b7} nothing analysed yet"),
+                        ),
+                )
+                .into_any_element(),
+            WizardPhase::IntentAnalysis => box_
+                .child(
+                    h_flex()
+                        .gap_x_6()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("DEFINE SKILL"),
+                        )
+                        .child(
+                            div()
+                                .text_color(theme.muted_foreground)
+                                .child("template matched \u{b7} 3 criteria proposed"),
                         ),
                 )
                 .into_any_element(),
@@ -454,7 +612,7 @@ impl CreateSkillView {
             ("6 \u{b7} Certify", "capability certified \u{2014} artifacts kept & callable"),
         ];
         v_flex()
-            .w(px(260.))
+            .w(px(320.))
             .flex_none()
             .gap_y_3()
             .p_3()

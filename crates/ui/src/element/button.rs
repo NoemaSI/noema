@@ -11,11 +11,19 @@ pub fn pbutton(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &mut App,
 ) -> Button {
+    pbutton_auto(id, label, on_click, cx).w_full().h_10()
+}
+
+/// Primary button sized to its content (for toolbars / button rows).
+pub fn pbutton_auto(
+    id: &'static str,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) -> Button {
     let theme = cx.theme();
     Button::new(id)
         .label(format!("{label} \u{25b8}"))
-        .w_full()
-        .h_10()
         .px_4()
         .py_2()
         .rounded(px(4.))
@@ -27,8 +35,18 @@ pub fn pbutton(
         .on_click(on_click)
 }
 
-/// Secondary button: white fill, grey outline, dark text.
+/// Secondary button: panel2 fill, grey outline, dark text.
 pub fn sbutton(
+    id: &'static str,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &mut App,
+) -> Button {
+    sbutton_auto(id, label, on_click, cx).w_full().h_10()
+}
+
+/// Secondary button sized to its content (for toolbars / button rows).
+pub fn sbutton_auto(
     id: &'static str,
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -37,8 +55,6 @@ pub fn sbutton(
     let theme = cx.theme();
     Button::new(id)
         .label(label)
-        .w_full()
-        .h_10()
         .px_4()
         .py_2()
         .rounded(px(4.))

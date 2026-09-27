@@ -6,13 +6,45 @@ use gpui_kit::*;
 use crate::element::button::*;
 use crate::{FONT_FAMILY, TEXT_SM};
 
+pub enum RoleState {
+    Draft(&'static str),
+    Defined(&'static str),
+    Errored(&'static str),
+    Final(&'static str),
+}
+
+impl RoleState {
+    fn label(&self) -> &'static str {
+        match self {
+            RoleState::Draft(name)
+            | RoleState::Defined(name)
+            | RoleState::Errored(name)
+            | RoleState::Final(name) => name,
+        }
+    }
+
+    fn tracked(&self) -> bool {
+        !matches!(self, RoleState::Draft(_))
+    }
+}
+
 pub struct CreateSkillView {
     active_tab: usize,
+    nodes: [RoleState; 5],
 }
 
 impl CreateSkillView {
     pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
-        Self { active_tab: 0 }
+        Self {
+            active_tab: 0,
+            nodes: [
+                RoleState::Draft("intake"),
+                RoleState::Draft("\u{2026}"),
+                RoleState::Draft("\u{2026}"),
+                RoleState::Draft("validate"),
+                RoleState::Draft("deliver"),
+            ],
+        }
     }
 
     fn render_tab_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -69,7 +101,7 @@ impl CreateSkillView {
                 h_flex()
                     .gap_x_4()
                     .items_start()
-                    .child(Self::render_role_circle(&theme))
+                    .child(Self::render_role_circle(&theme, &self.nodes))
                     .child(Self::render_skill_state(&theme))
                     .child(Self::render_training_path(&theme)),
             )
@@ -112,7 +144,28 @@ impl CreateSkillView {
             )
     }
 
-    fn render_role_circle(theme: &Theme) -> impl IntoElement {
+    fn render_role_circle(theme: &Theme, nodes: &[RoleState; 5]) -> impl IntoElement {
+        // Pentagon layout: 5 nodes of 56px on a ring of radius 76 around the
+        // center (120,120) of the 240px circle. Draft nodes get no spoke.
+        let rgb = theme.border.to_rgb();
+        let hex = format!(
+            "#{:02x}{:02x}{:02x}",
+            (rgb.r * 255.) as u8,
+            (rgb.g * 255.) as u8,
+            (rgb.b * 255.) as u8
+        );
+        let angles = [-90f32, -18., 54., 126., 198.];
+        let mut spokes = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><g fill="{}">"#,
+            hex
+        );
+        for (_state, angle) in nodes.iter().zip(angles.iter()) {
+            spokes.push_str(&format!(
+                r#"<rect x="120" y="119.5" width="76" height="1" transform="rotate({angle} 120 120)"/>"#
+            ));
+        }
+        spokes.push_str("</g></svg>");
+        let positions = [(92., 16.), (164., 68.), (137., 153.), (47., 153.), (20., 68.)];
         div()
             .relative()
             .size(px(240.))
@@ -120,29 +173,58 @@ impl CreateSkillView {
             .border_1()
             .border_color(theme.border)
             .rounded_full()
-            .child(Self::role_node("intake", px(92.), px(12.), theme))
-            .child(Self::role_node("\u{2026}", px(164.), px(84.), theme))
-            .child(Self::role_node("\u{2026}", px(148.), px(156.), theme))
-            .child(Self::role_node("validate", px(36.), px(156.), theme))
-            .child(Self::role_node("deliver", px(20.), px(84.), theme))
+            .child(
+                svg()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .size(px(240.))
+                    .text_color(theme.border)
+                    .data(spokes.as_bytes()),
+            )
+            .children(
+                nodes
+                    .iter()
+                    .zip(positions.iter())
+                    .map(|(state, (left, top))| Self::role_node(state, px(*left), px(*top), theme)),
+            )
     }
 
-    fn role_node(label: &'static str, left: Pixels, top: Pixels, theme: &Theme) -> Div {
-        div()
+    fn role_node(state: &RoleState, left: Pixels, top: Pixels, theme: &Theme) -> Div {
+        let base = div()
             .absolute()
             .left(left)
             .top(top)
             .size(px(56.))
             .rounded_full()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.secondary)
+            .bg(theme.overlay)
             .flex()
             .items_center()
             .justify_center()
-            .text_size(px(10.))
-            .text_color(theme.muted_foreground)
-            .child(label)
+            .text_size(px(10.));
+        match state {
+            RoleState::Draft(name) => base
+                .border_1()
+                .border_dashed()
+                .border_color(theme.border)
+                .text_color(theme.muted_foreground)
+                .child(*name),
+            RoleState::Defined(name) => base
+                .border_1()
+                .border_color(theme.border)
+                .text_color(theme.muted_foreground)
+                .child(*name),
+            RoleState::Final(_name) => base
+                .border_2()
+                .border_color(theme.foreground)
+                .text_color(theme.foreground)
+                .child("\u{2713}"),
+            RoleState::Errored(_name) => base
+                .border_2()
+                .border_color(theme.danger)
+                .text_color(theme.danger)
+                .child("\u{2715}"),
+        }
     }
 
     fn render_skill_state(theme: &Theme) -> impl IntoElement {

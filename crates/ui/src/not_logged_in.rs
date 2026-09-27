@@ -14,7 +14,7 @@ use crate::FONT_FAMILY;
 #[derive(Clone)]
 pub struct LoginClicked;
 
-pub(crate) static NOEMA_LOGO: &[u8] = include_bytes!("../../../assets/noema_logo.png");
+pub(crate) static NOEMA_LOGO: &[u8] = include_bytes!("../../../assets/noema_logo_transparent.png");
 //const FONT_FAMILY: &str= "IBM Plex Sans";
 
 pub struct NotLoggedIn {

@@ -7,6 +7,6 @@ pub enum Route {
 
 impl Default for Route {
     fn default() -> Self {
-        Self::NotLoggedIn
+        Self::Workspace
     }
 }

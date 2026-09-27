@@ -4,6 +4,7 @@ mod workspace;
 mod world;
 mod market;
 mod element;
+mod skill;
 
 use std::{borrow::Cow, fs, path::Path, rc::Rc};
 

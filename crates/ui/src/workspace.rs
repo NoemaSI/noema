@@ -8,6 +8,7 @@ use gpui_kit::*;
 use crate::market::market_view::MarketView;
 use crate::not_logged_in::NOEMA_LOGO;
 use crate::FONT_FAMILY;
+use crate::skill::create_skill_view::CreateSkillView;
 use crate::world::world_view::WorldView;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -15,6 +16,7 @@ enum WorkspaceItem {
     EvolveResearch,
     ViewMarket,
     ResumeSession,
+    CreateSkill,
     NewDiscovery,
 }
 
@@ -84,6 +86,14 @@ impl Workspace {
     }
 }
 
+fn open_create_skill_view(_window: &mut Window, cx: &mut App) {
+    let _ = cx.open_window(WindowOptions::default(), |window, cx| {
+        let view = cx.new(|cx| CreateSkillView::new(window, cx));
+        // This first level on the window, should be a Root.
+        cx.new(|cx| Root::new(view, window, cx))
+    });
+}
+
 fn open_world_view(_window: &mut Window, cx: &mut App) {
     let _ = cx.open_window(WindowOptions::default(), |window, cx| {
         let view = cx.new(|cx| WorldView::new(window, cx));
@@ -106,6 +116,7 @@ impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let world_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_world_view);
         let market_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_market_view);
+        let crate_skill: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_create_skill_view);
         let noop: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_noop);
 
         div()
@@ -120,6 +131,13 @@ impl Render for Workspace {
                     .px_4()
                     .pt_8()
                     .gap_y_3()
+                    .child(self.render_item(
+                        WorkspaceItem::CreateSkill,
+                        "create-skill",
+                        "Create skill",
+                        crate_skill.clone(),
+                        cx,
+                    ))
                     .child(self.render_item(
                         WorkspaceItem::EvolveResearch,
                         "evolve-research",

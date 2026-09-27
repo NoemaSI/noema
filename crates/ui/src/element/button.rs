@@ -43,7 +43,7 @@ pub fn sbutton(
         .py_2()
         .rounded(px(4.))
         .text_size(TEXT_SM)
-        .bg(theme.secondary)
+        .bg(theme.overlay)
         .text_color(theme.foreground)
         .border_1()
         .border_color(theme.border)

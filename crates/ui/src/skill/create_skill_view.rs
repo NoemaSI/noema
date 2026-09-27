@@ -204,7 +204,7 @@ impl CreateSkillView {
             .text_size(px(10.));
         match state {
             RoleState::Draft(name) => base
-                .border_1()
+                .border_2()
                 .border_dashed()
                 .border_color(theme.border)
                 .text_color(theme.muted_foreground)

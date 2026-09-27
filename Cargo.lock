@@ -7329,8 +7329,10 @@ dependencies = [
 name = "ui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "client",
  "gpui-kit",
+ "serde_json",
 ]
 
 [[package]]

@@ -7,6 +7,7 @@ use client::StoredIdentity;
 use gpui_kit::component::{button::*, *};
 use gpui_kit::*;
 
+use crate::element::button::*;
 use crate::FONT_FAMILY;
 
 /// Emitted when the user presses Login (until real auth exists).
@@ -109,26 +110,24 @@ impl NotLoggedIn {
             );
         let card = match &self.identity {
             Some(_) => card
-                .child(
-                    Button::new("login")
-                        .primary()
-                        .w_full()
-                        .label("Login")
-                        .on_click(cx.listener(|_, _, _, cx| cx.emit(LoginClicked))),
-                )
-                .child(
-                    Button::new("destroy-identity")
-                        .w_full()
-                        .label("Destroy identity")
-                        .on_click(cx.listener(Self::destroy_identity)),
-                ),
-            None => card.child(
-                Button::new("create-identity")
-                    .primary()
-                    .w_full()
-                    .label("Create identity")
-                    .on_click(cx.listener(Self::create_identity)),
-            ),
+                .child(pbutton(
+                    "login",
+                    "Login",
+                    cx.listener(|_, _, _, cx| cx.emit(LoginClicked)),
+                    cx,
+                ))
+                .child(sbutton(
+                    "destroy-identity",
+                    "Destroy identity",
+                    cx.listener(Self::destroy_identity),
+                    cx,
+                )),
+            None => card.child(pbutton(
+                "create-identity",
+                "Create identity",
+                cx.listener(Self::create_identity),
+                cx,
+            )),
         };
         div()
             .v_flex()

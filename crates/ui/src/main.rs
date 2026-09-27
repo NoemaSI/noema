@@ -3,8 +3,9 @@ mod route;
 mod workspace;
 mod world;
 mod market;
+mod element;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, fs, path::Path, rc::Rc};
 
 use gpui_kit::component::*;
 use gpui_kit::*;
@@ -29,7 +30,7 @@ static IOSKELEY_SEMIBOLD: &[u8] =
 
 pub const FONT_FAMILY: &str = "Ioskeley Mono";
 
-pub const TEXT_SM: Pixels = px(13.0);
+pub const TEXT_SM: Pixels = px(12.0);
 pub const TEXT_BASE: Pixels = px(14.0);
 pub const TEXT_LG: Pixels = px(16.0);
 
@@ -73,6 +74,27 @@ impl Render for AppRoot {
     }
 }
 
+
+
+fn load_theme(cx: &mut App) -> Result<()> {
+    let theme_path = Path::new("assets/theme/noema_light.json");
+
+    let json = fs::read_to_string(theme_path)?;
+
+    let theme_set: ThemeSet =
+        serde_json::from_str(&json)?;
+
+    let theme: ThemeConfig = theme_set
+        .themes
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("theme file contains no themes"))?;
+
+    Theme::global_mut(cx).apply_config(&Rc::new(theme));
+
+    Ok(())
+}
+
 fn main() {
     let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
 
@@ -104,6 +126,7 @@ fn main() {
 
         // This must be called before using any GPUI Component features.
         gpui_kit::init(cx);
+        load_theme(cx).expect("failed to load theme");
 
         cx.spawn(async move |cx| {
             cx.open_window(WindowOptions::default(), |window, cx| {

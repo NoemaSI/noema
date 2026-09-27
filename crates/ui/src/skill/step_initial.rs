@@ -32,7 +32,7 @@ impl WizardStep for InitialStep {
         Some("EMPTY")
     }
 
-    fn state_content(&self, _theme: &Theme) -> AnyElement {
+    fn state_content(&self, _view: &CreateSkillView, _theme: &Theme) -> AnyElement {
         v_flex()
             .gap_y_1()
             .child("nothing yet \u{2014} a skill starts with a goal.")

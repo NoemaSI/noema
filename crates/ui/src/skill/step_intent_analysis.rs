@@ -1,5 +1,6 @@
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Theme;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use super::create_skill_view::CreateSkillView;
@@ -37,7 +38,7 @@ impl WizardStep for IntentAnalysisStep {
         }
     }
 
-    fn state_content(&self, theme: &Theme) -> AnyElement {
+    fn state_content(&self, view: &CreateSkillView, theme: &Theme) -> AnyElement {
         h_flex()
             .gap_x_6()
             .child(
@@ -48,7 +49,20 @@ impl WizardStep for IntentAnalysisStep {
             .child(
                 div()
                     .text_color(theme.muted_foreground)
-                    .child("template matched \u{b7} 3 criteria proposed"),
+                    .child(format!(
+                        "template matched \u{b7} {} criteria proposed",
+                        view.acceptance.len()
+                    )),
+            )
+            .child(
+                div()
+                    .text_color(theme.red)
+                    .when(!view.error.is_empty(), |div| {
+                        div.child(format!(
+                            "{}",
+                            view.error.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",")
+                        ))
+                    } )
             )
             .into_any_element()
     }

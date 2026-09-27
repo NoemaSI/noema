@@ -63,7 +63,7 @@ pub trait WizardStep {
     }
 
     /// Content of the SKILL STATE box, below its heading.
-    fn state_content(&self, theme: &Theme) -> AnyElement;
+    fn state_content(&self, view: &CreateSkillView, theme: &Theme) -> AnyElement;
 
     /// Main area between the circle row and the action row.
     fn main_area(&self, view: &CreateSkillView, theme: &Theme) -> AnyElement;
@@ -94,7 +94,7 @@ pub fn badge_pill(label: &'static str, theme: &Theme) -> Div {
 }
 
 /// The SKILL STATE box: heading plus the step's state content.
-pub fn state_box(step: &dyn WizardStep, theme: &Theme) -> Div {
+pub fn state_box(step: &dyn WizardStep, view: &CreateSkillView, theme: &Theme) -> Div {
     v_flex()
         .flex_1()
         .gap_y_1()
@@ -109,7 +109,7 @@ pub fn state_box(step: &dyn WizardStep, theme: &Theme) -> Div {
                 .text_color(theme.muted_foreground)
                 .child("SKILL STATE"),
         )
-        .child(step.state_content(theme))
+        .child(step.state_content(view, theme))
 }
 
 /// Nodes of 56px on a ring of radius 76 around the center (120,120) of the
@@ -302,11 +302,6 @@ pub fn pill(label: impl Into<SharedString>, border: Hsla, fg: Hsla) -> Div {
 /// SKILL NAME / GOAL / ACCEPTANCE CRITERIA fields shared by the DefineSkill
 /// and IntentAnalysis steps. `analysed` switches to the agent-proposed view.
 pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool) -> Div {
-    let suggested: [&'static str; 3] = [
-        "fit converges",
-        "validated on held-out runs",
-        "report cites CIs",
-    ];
     v_flex()
         .gap_y_3()
         .child(
@@ -363,7 +358,7 @@ pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool)
                             ))
                         })
                         .when(analysed, |row| {
-                            row.children(suggested.iter().map(|criterion| {
+                            row.children(view.acceptance.iter().map(|criterion| {
                                 pill(
                                     format!("{criterion} \u{2713} accept"),
                                     theme.ring,

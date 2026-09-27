@@ -3,6 +3,7 @@ use gpui_kit::component::Theme;
 use gpui_kit::*;
 
 use super::create_skill_view::CreateSkillView;
+use jobctl::intent::IntentJob;
 use super::wizard::{define_form_fields, RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::skill::wizard::INITIAL_ROLE_DRAFT;
@@ -27,7 +28,7 @@ impl WizardStep for DefineSkillStep {
         "\u{25c2} New skill \u{2014} unnamed".to_string()
     }
 
-    fn state_content(&self, theme: &Theme) -> AnyElement {
+    fn state_content(&self, _view: &CreateSkillView, theme: &Theme) -> AnyElement {
         h_flex()
             .gap_x_6()
             .child(
@@ -60,6 +61,7 @@ impl WizardStep for DefineSkillStep {
     }
 
     fn actions(&self, view: &CreateSkillView, cx: &mut Context<CreateSkillView>) -> AnyElement {
+        let entity = cx.entity().clone();
         h_flex()
             .gap_x_2()
             .child(sbutton_auto(
@@ -72,7 +74,17 @@ impl WizardStep for DefineSkillStep {
             .child(pbutton_auto(
                 "analyze-intent",
                 "Analyze intent",
-                view.goto(WizardPhase::IntentAnalysis, cx),
+                move |_, _, app| {
+                    entity.update(app, |this, cx| {
+                        let job = IntentJob {
+                            name: this.name_input.read(cx).value().to_string(),
+                            goal: this.goal_input.read(cx).value().to_string(),
+                        };
+                        let _ = this.submitter.submit(job);
+                        this.phase = WizardPhase::IntentAnalysis;
+                        cx.notify();
+                    });
+                },
                 cx,
             ))
             .into_any_element()

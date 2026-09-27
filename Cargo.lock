@@ -3601,6 +3601,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jobctl"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7332,6 +7341,7 @@ dependencies = [
  "anyhow",
  "client",
  "gpui-kit",
+ "jobctl",
  "serde_json",
 ]
 

@@ -4,7 +4,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
+use jobctl::{Engine, EngineError, Submitter};
 
+use jobctl::intent::IntentHandler;
 use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::{FONT_FAMILY, TEXT_SM};
@@ -17,15 +19,36 @@ pub struct SkillDraft {
 
 pub struct CreateSkillView {
     active_tab: usize,
-    phase: WizardPhase,
+    //  pub(crate)  means public within the current crate, but not from other crate
+    pub(crate) phase: WizardPhase,
     pub(crate) name_input: Entity<InputState>,
     pub(crate) goal_input: Entity<TextareaState>,
     pub(crate) acceptance: Vec<String>,
+    pub(crate) error: Vec<EngineError>,
     pub(crate) drafts: Vec<SkillDraft>,
+    pub(crate) submitter: Submitter<IntentHandler>,
 }
 
 impl CreateSkillView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let (submitter, mut results) = Engine::spawn(IntentHandler, 32, 1);
+        let weak = cx.weak_entity();
+        cx.spawn(async move |this: WeakEntity<CreateSkillView>, cx| {
+            while let Some((_id, outcome)) = results.recv().await {
+                let Ok(()) = this.update(cx, |view, cx| {
+                    match outcome {
+                        Ok(criteria) => {
+                            view.acceptance = criteria;
+                        }
+                        Err(e) => {
+                            view.error.push(e);
+                        }
+                    }
+                    cx.notify();
+                }) else { break;};
+            }
+        })
+        .detach();
         Self {
             active_tab: 0,
             phase: WizardPhase::Initial,
@@ -36,7 +59,9 @@ impl CreateSkillView {
                     .rows(3)
             }),
             acceptance: Vec::new(),
+            error: Vec::new(),
             drafts: Vec::new(),
+            submitter,
         }
     }
 
@@ -174,7 +199,7 @@ impl CreateSkillView {
                     .gap_x_4()
                     .items_stretch()
                     .child(wizard::role_circle(&theme, &nodes))
-                    .child(wizard::state_box(step, &theme))
+                    .child(wizard::state_box(step, self, &theme))
                     .child(wizard::training_path(&theme, step.active_path_step())),
             )
             .child(step.main_area(self, &theme))

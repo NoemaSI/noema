@@ -1,10 +1,25 @@
 use gpui_kit::base::{h_flex, v_flex, StyledExt};
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{ActiveTheme, Theme};
+use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::element::button::*;
 use crate::{FONT_FAMILY, TEXT_SM};
+
+/// The create-skill wizard walks the user through up to ten phases.
+/// Implemented so far: Initial, DefineSkill, IntentAnalysis.
+/// Planned: AttachData, Inspect, ReviewPlan, Train, Validate, Certify, Done.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WizardPhase {
+    /// Nothing interacted with yet; landing state.
+    Initial,
+    /// "New Skill" clicked: goal + acceptance criteria form is open.
+    DefineSkill,
+    /// "Analyze intent" clicked: agent reads name & goal.
+    IntentAnalysis,
+}
 
 pub enum RoleState {
     Draft(&'static str),
@@ -30,20 +45,59 @@ impl RoleState {
 
 pub struct CreateSkillView {
     active_tab: usize,
+    phase: WizardPhase,
     nodes: Vec<RoleState>,
+    name_input: Entity<InputState>,
+    goal_input: Entity<InputState>,
+    acceptance: Vec<String>,
 }
 
 impl CreateSkillView {
-    pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             active_tab: 0,
-            nodes: vec![
+            phase: WizardPhase::Initial,
+            nodes: Self::nodes_for_phase(WizardPhase::Initial),
+            name_input: cx.new(|cx| InputState::new(window, cx).placeholder("unnamed")),
+            goal_input: cx.new(|cx| {
+                InputState::new(window, cx).placeholder("what should this skill do, in plain words?")
+            }),
+            acceptance: Vec::new(),
+        }
+    }
+
+    fn nodes_for_phase(phase: WizardPhase) -> Vec<RoleState> {
+        match phase {
+            WizardPhase::Initial => vec![
                 RoleState::Draft("intake"),
                 RoleState::Draft("\u{2026}"),
                 RoleState::Draft("\u{2026}"),
                 RoleState::Draft("validate"),
                 RoleState::Draft("deliver"),
             ],
+            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => vec![
+                RoleState::Defined("QC"),
+                RoleState::Defined("FIT"),
+                RoleState::Defined("KIN"),
+                RoleState::Defined("VAL"),
+                RoleState::Defined("RPT"),
+            ],
+        }
+    }
+
+    /// Click handler that transitions the wizard to `phase`.
+    fn goto(
+        &self,
+        phase: WizardPhase,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+        let entity = cx.entity().clone();
+        move |_, _, cx| {
+            entity.update(cx, |this, cx| {
+                this.phase = phase;
+                this.nodes = Self::nodes_for_phase(phase);
+                cx.notify();
+            })
         }
     }
 
@@ -86,64 +140,184 @@ impl CreateSkillView {
                     .text_size(TEXT_SM)
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("\u{25c2} New skill \u{2014} unnamed")
-                    .child(
-                        div()
-                            .px_2()
-                            .py_0p5()
-                            .border_1()
-                            .border_color(theme.border)
-                            .rounded(px(3.))
-                            .text_size(px(10.))
-                            .text_color(theme.muted_foreground)
-                            .child("EMPTY"),
-                    ),
+                    .when(self.phase == WizardPhase::Initial, |row| {
+                        row.child(
+                            div()
+                                .px_2()
+                                .py_0p5()
+                                .border_1()
+                                .border_color(theme.border)
+                                .rounded(px(3.))
+                                .text_size(px(10.))
+                                .text_color(theme.muted_foreground)
+                                .child("EMPTY"),
+                        )
+                    }),
             )
             .child(
                 h_flex()
                     .gap_x_4()
                     .items_stretch()
                     .child(Self::render_role_circle(&theme, &self.nodes))
-                    .child(Self::render_skill_state(&theme))
-                    .child(Self::render_training_path(&theme)),
+                    .child(Self::render_skill_state(&theme, self.phase))
+                    .child(Self::render_training_path(&theme, self.active_step())),
             )
-            .child(
-                div()
-                    .max_w(px(520.))
-                    .mt_4()
-                    .text_size(TEXT_SM)
-                    .text_color(theme.muted_foreground)
-                    .child(
-                        "A skill is a capability the agent builds and validates against your data \u{2014} not a prompt, a certified competence. The path on the right shows how one gets built.",
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_x_2()
-                    .child(pbutton_auto(
-                        "new-skill",
-                        "+ New Skill",
-                        |_, _, _| {},
-                        cx,
-                    ))
-                    .child(sbutton_auto(
-                        "browse-templates",
-                        "Browse templates",
-                        |_, _, _| {},
-                        cx,
-                    ))
-                    .child(sbutton_auto(
-                        "import-plan",
-                        "Import plan",
-                        |_, _, _| {},
-                        cx,
-                    )),
-            )
+            .when(self.phase != WizardPhase::Initial, |panel| {
+                panel.child(self.render_define_form(&theme, cx))
+            })
+            .when(self.phase == WizardPhase::Initial, |panel| {
+                panel.child(
+                    div()
+                        .max_w(px(520.))
+                        .mt_4()
+                        .text_size(TEXT_SM)
+                        .text_color(theme.muted_foreground)
+                        .child(
+                            "A skill is a capability the agent builds and validates against your data \u{2014} not a prompt, a certified competence. The path on the right shows how one gets built.",
+                        ),
+                )
+            })
+            .child(self.render_action_row(cx))
             .child(
                 div()
                     .text_size(TEXT_SM)
                     .text_color(theme.muted_foreground)
                     .child("Certified skills: (none)"),
             )
+    }
+
+    /// Index of the highlighted TRAINING PATH step for the current phase.
+    fn active_step(&self) -> Option<usize> {
+        match self.phase {
+            WizardPhase::Initial => None,
+            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => Some(0),
+        }
+    }
+
+    fn render_define_form(&self, theme: &Theme, _cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .gap_y_3()
+            .child(
+                v_flex()
+                    .gap_y_1()
+                    .child(Self::form_label("SKILL NAME", theme))
+                    .child(Input::new(&self.name_input).w_full().h(px(36.))),
+            )
+            .child(
+                v_flex()
+                    .gap_y_1()
+                    .child(Self::form_label("GOAL (PLAIN LANGUAGE)", theme))
+                    .child(Input::new(&self.goal_input).w_full().h(px(36.))),
+            )
+            .child(
+                v_flex()
+                    .gap_y_1()
+                    .child(Self::form_label(
+                        "WHAT COUNTS AS DONE (ACCEPTANCE CRITERIA)",
+                        theme,
+                    ))
+                    .child(
+                        h_flex()
+                            .gap_x_2()
+                            .items_center()
+                            .when(self.acceptance.is_empty(), |row| {
+                                row.child(
+                                    div()
+                                        .px_2()
+                                        .py_0p5()
+                                        .border_1()
+                                        .border_color(theme.border)
+                                        .rounded_full()
+                                        .text_size(px(10.))
+                                        .text_color(theme.muted_foreground)
+                                        .child("agent will suggest\u{2026}"),
+                                )
+                            })
+                            .children(self.acceptance.iter().map(|criterion| {
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .border_1()
+                                    .border_color(theme.border)
+                                    .rounded_full()
+                                    .text_size(px(10.))
+                                    .text_color(theme.foreground)
+                                    .child(criterion.clone())
+                            }))
+                            .child(
+                                div()
+                                    .cursor_pointer()
+                                    .px_2()
+                                    .py_0p5()
+                                    .border_1()
+                                    .border_color(theme.ring)
+                                    .rounded_full()
+                                    .text_size(px(10.))
+                                    .text_color(theme.primary_foreground)
+                                    .child("+ add yourself"),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .max_w(px(720.))
+                    .text_size(px(10.))
+                    .text_color(theme.muted_foreground)
+                    .child(
+                        "The agent will read name & goal, match a template, propose acceptance criteria and resolve the method band \u{2014} you review and correct everything in the next step.",
+                    ),
+            )
+    }
+
+    fn form_label(text: &'static str, theme: &Theme) -> Div {
+        div()
+            .text_size(px(10.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.muted_foreground)
+            .child(text)
+    }
+
+    fn render_action_row(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().clone();
+        match self.phase {
+            WizardPhase::Initial => h_flex()
+                .gap_x_2()
+                .child(pbutton_auto(
+                    "new-skill",
+                    "+ New Skill",
+                    self.goto(WizardPhase::DefineSkill, cx),
+                    cx,
+                ))
+                .child(sbutton_auto(
+                    "browse-templates",
+                    "Browse templates",
+                    |_, _, _| {},
+                    cx,
+                ))
+                .child(sbutton_auto(
+                    "import-plan",
+                    "Import plan",
+                    |_, _, _| {},
+                    cx,
+                ))
+                .into_any_element(),
+            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => h_flex()
+                .gap_x_2()
+                .child(sbutton_auto(
+                    "cancel",
+                    "Cancel",
+                    self.goto(WizardPhase::Initial, cx),
+                    cx,
+                ))
+                .child(sbutton_auto("save-draft", "Save draft", |_, _, _| {}, cx))
+                .child(pbutton_auto(
+                    "analyze-intent",
+                    "Analyze intent",
+                    self.goto(WizardPhase::IntentAnalysis, cx),
+                    cx,
+                ))
+                .into_any_element(),
+        }
     }
 
     fn render_role_circle(theme: &Theme, nodes: &[RoleState]) -> impl IntoElement {
@@ -229,8 +403,8 @@ impl CreateSkillView {
         }
     }
 
-    fn render_skill_state(theme: &Theme) -> impl IntoElement {
-        v_flex()
+    fn render_skill_state(theme: &Theme, phase: WizardPhase) -> impl IntoElement {
+        let box_ = v_flex()
             .flex_1()
             .gap_y_1()
             .p_3()
@@ -243,14 +417,34 @@ impl CreateSkillView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
                     .child("SKILL STATE"),
-            )
-            .child("nothing yet \u{2014} a skill starts with a goal.")
-            .child("three roles are fixed: intake \u{2794} validate \u{2794} deliver.")
-            .child("the method band between them is the template's choice \u{2014}")
-            .child("its node count and names appear once a template is picked.")
+            );
+        match phase {
+            WizardPhase::Initial => box_
+                .child("nothing yet \u{2014} a skill starts with a goal.")
+                .child("three roles are fixed: intake \u{2794} validate \u{2794} deliver.")
+                .child("the method band between them is the template's choice \u{2014}")
+                .child("its node count and names appear once a template is picked.")
+                .into_any_element(),
+            WizardPhase::DefineSkill | WizardPhase::IntentAnalysis => box_
+                .child(
+                    h_flex()
+                        .gap_x_6()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("DEFINE SKILL"),
+                        )
+                        .child(
+                            div()
+                                .text_color(theme.muted_foreground)
+                                .child("goal stated \u{b7} nothing analysed yet"),
+                        ),
+                )
+                .into_any_element(),
+        }
     }
 
-    fn render_training_path(theme: &Theme) -> impl IntoElement {
+    fn render_training_path(theme: &Theme, active: Option<usize>) -> impl IntoElement {
         let steps: [(&str, &str); 6] = [
             ("1 \u{b7} Define skill", "state goal & acceptance criteria"),
             ("2 \u{b7} Attach data", "upload sensorgrams and run metadata"),
@@ -275,11 +469,48 @@ impl CreateSkillView {
                     .text_color(theme.muted_foreground)
                     .child("TRAINING PATH"),
             )
-            .children(steps.iter().map(|(title, desc)| {
-                v_flex()
-                    .gap_0p5()
-                    .child(div().text_color(theme.foreground).child(*title))
-                    .child(div().text_size(px(10.)).text_color(theme.muted_foreground).child(*desc))
+            .children(steps.iter().enumerate().map(|(i, (title, desc))| {
+                let is_active = active == Some(i);
+                h_flex()
+                    .gap_x_2()
+                    .child(
+                        div()
+                            .mt(px(4.))
+                            .size(px(6.))
+                            .flex_none()
+                            .rounded_full()
+                            .map(|dot| {
+                                if is_active {
+                                    dot.bg(theme.primary_foreground)
+                                } else {
+                                    dot.border_1().border_color(theme.border)
+                                }
+                            }),
+                    )
+                    .child(
+                        v_flex()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_color(if is_active {
+                                        theme.primary_foreground
+                                    } else {
+                                        theme.foreground
+                                    })
+                                    .font_weight(if is_active {
+                                        FontWeight::SEMIBOLD
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .child(*title),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(theme.muted_foreground)
+                                    .child(*desc),
+                            ),
+                    )
             }))
     }
 

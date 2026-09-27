@@ -76,11 +76,12 @@ impl WizardStep for DefineSkillStep {
                 "Analyze intent",
                 move |_, _, app| {
                     entity.update(app, |this, cx| {
+                        this.error.clear();
                         let job = IntentJob {
                             name: this.name_input.read(cx).value().to_string(),
                             goal: this.goal_input.read(cx).value().to_string(),
                         };
-                        let _ = this.submitter.submit(job);
+                        let _ = this.jobctl.submit(job);
                         this.phase = WizardPhase::IntentAnalysis;
                         cx.notify();
                     });

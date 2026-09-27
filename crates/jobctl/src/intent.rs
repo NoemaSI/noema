@@ -23,15 +23,12 @@ impl Handler for IntentHandler {
         job: IntentJob,
     ) -> impl Future<Output = Result<Self::Output, EngineError>> + Send {
         async move {
-            if job.name.is_empty() || job.goal.is_empty() {
-                return Err(EngineError::InvalidInput("input is empty".to_string()));
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
             if job.goal.trim().is_empty() {
                 return Err(EngineError::JobFailed(
                     "goal is empty; nothing to analyse".into(),
                 ));
             }
+            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
             Ok(vec![
                 "fit converges".into(),
                 "validated on held-out runs".into(),

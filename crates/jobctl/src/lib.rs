@@ -26,6 +26,13 @@
 //! })
 //! .detach();
 //! ```
+//!
+//! A job can trigger other jobs, e.g. the UI might invoke a job that creates another job for
+//! agentctl which is dispatched to vmctl.
+//!
+//!
+//!
+//!
 
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};

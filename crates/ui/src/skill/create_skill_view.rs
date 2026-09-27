@@ -26,7 +26,7 @@ pub struct CreateSkillView {
     pub(crate) acceptance: Vec<String>,
     pub(crate) error: Vec<EngineError>,
     pub(crate) drafts: Vec<SkillDraft>,
-    pub(crate) submitter: Submitter<IntentHandler>,
+    pub(crate) jobctl: Submitter<IntentHandler>,
 }
 
 impl CreateSkillView {
@@ -61,7 +61,7 @@ impl CreateSkillView {
             acceptance: Vec::new(),
             error: Vec::new(),
             drafts: Vec::new(),
-            submitter,
+            jobctl: submitter,
         }
     }
 

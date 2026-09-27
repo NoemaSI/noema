@@ -30,14 +30,14 @@ impl RoleState {
 
 pub struct CreateSkillView {
     active_tab: usize,
-    nodes: [RoleState; 5],
+    nodes: Vec<RoleState>,
 }
 
 impl CreateSkillView {
     pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
         Self {
             active_tab: 0,
-            nodes: [
+            nodes: vec![
                 RoleState::Draft("intake"),
                 RoleState::Draft("\u{2026}"),
                 RoleState::Draft("\u{2026}"),
@@ -144,9 +144,9 @@ impl CreateSkillView {
             )
     }
 
-    fn render_role_circle(theme: &Theme, nodes: &[RoleState; 5]) -> impl IntoElement {
-        // Pentagon layout: 5 nodes of 56px on a ring of radius 76 around the
-        // center (120,120) of the 240px circle. Draft nodes get no spoke.
+    fn render_role_circle(theme: &Theme, nodes: &[RoleState]) -> impl IntoElement {
+        // Nodes of 56px on a ring of radius 76 around the center (120,120) of
+        // the 240px circle, evenly spaced starting at the top.
         let rgb = theme.border.to_rgb();
         let hex = format!(
             "#{:02x}{:02x}{:02x}",
@@ -154,18 +154,18 @@ impl CreateSkillView {
             (rgb.g * 255.) as u8,
             (rgb.b * 255.) as u8
         );
-        let angles = [-90f32, -18., 54., 126., 198.];
+        let n = nodes.len().max(1) as f32;
         let mut spokes = format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><g fill="{}">"#,
             hex
         );
-        for (_state, angle) in nodes.iter().zip(angles.iter()) {
+        for i in 0..nodes.len() {
+            let angle = -90. + i as f32 * 360. / n;
             spokes.push_str(&format!(
                 r#"<rect x="120" y="119.5" width="76" height="1" transform="rotate({angle} 120 120)"/>"#
             ));
         }
         spokes.push_str("</g></svg>");
-        let positions = [(92., 16.), (164., 68.), (137., 153.), (47., 153.), (20., 68.)];
         div()
             .relative()
             .size(px(240.))
@@ -182,12 +182,12 @@ impl CreateSkillView {
                     .text_color(theme.border)
                     .data(spokes.as_bytes()),
             )
-            .children(
-                nodes
-                    .iter()
-                    .zip(positions.iter())
-                    .map(|(state, (left, top))| Self::role_node(state, px(*left), px(*top), theme)),
-            )
+            .children(nodes.iter().enumerate().map(|(i, state)| {
+                let a = (i as f32 * 360. / n - 90.) * std::f32::consts::PI / 180.;
+                let left = px(120. + 76. * a.cos() - 28.);
+                let top = px(120. + 76. * a.sin() - 28.);
+                Self::role_node(state, left, top, theme)
+            }))
     }
 
     fn role_node(state: &RoleState, left: Pixels, top: Pixels, theme: &Theme) -> Div {

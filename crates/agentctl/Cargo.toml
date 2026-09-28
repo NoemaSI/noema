@@ -1,0 +1,28 @@
+[package]
+name = "agentctl"
+version = "0.1.0"
+edition = "2024"
+
+# NOTE: this package is copied into the guest VM standalone (Cargo.toml + src
+# only), so it must NOT use workspace inheritance and must have no path deps.
+# The guest only needs the server; the host pulls in the `client` feature.
+
+[features]
+default = ["server"]
+server = ["dep:axum", "dep:tokio", "dep:tokio-stream"]
+client = ["dep:reqwest", "dep:futures-util", "dep:bytes"]
+
+[[bin]]
+name = "agentctl"
+path = "src/main.rs"
+required-features = ["server"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+axum = { version = "0.8", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net"], optional = true }
+tokio-stream = { version = "0.1", optional = true }
+reqwest = { version = "0.12", features = ["json", "stream"], optional = true }
+futures-util = { version = "0.3", optional = true }
+bytes = { version = "1", optional = true }

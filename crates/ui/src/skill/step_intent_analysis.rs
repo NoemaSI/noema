@@ -72,6 +72,38 @@ impl WizardStep for IntentAnalysisStep {
             .gap_y_3()
             .child(define_form_fields(view, theme, true))
             .child(Self::analysis_box(theme))
+            .child(
+                v_flex()
+                    .id("agent-log")
+                    .gap_y_1()
+                    .p_3()
+                    .max_h(px(220.))
+                    .overflow_y_scroll()
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded(px(4.))
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted_foreground)
+                            .child("AGENT LOG"),
+                    )
+                    .when(view.agent_log.is_empty(), |log| {
+                        log.child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(theme.muted_foreground)
+                                .child("waiting for agent events\u{2026}"),
+                        )
+                    })
+                    .children(view.agent_log.iter().map(|line| {
+                        div()
+                            .text_size(px(10.))
+                            .text_color(theme.foreground)
+                            .child(line.clone())
+                    })),
+            )
             .into_any_element()
     }
 

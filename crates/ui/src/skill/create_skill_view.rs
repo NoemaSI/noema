@@ -4,9 +4,10 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
-use jobctl::{Engine, EngineError, Submitter};
+use jobctl::jobs::intent::{Intent, IntentOutput};
+use jobctl::protocol::AgentEvent;
+use jobctl::{engine, EngineHandle, EventStatus};
 
-use jobctl::intent::IntentHandler;
 use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::{FONT_FAMILY, TEXT_SM};
@@ -24,25 +25,65 @@ pub struct CreateSkillView {
     pub(crate) name_input: Entity<InputState>,
     pub(crate) goal_input: Entity<TextareaState>,
     pub(crate) acceptance: Vec<String>,
-    pub(crate) error: Vec<EngineError>,
+    pub(crate) error: Vec<String>,
+    pub(crate) agent_log: Vec<String>,
     pub(crate) drafts: Vec<SkillDraft>,
-    pub(crate) jobctl: Submitter<IntentHandler>,
+    pub(crate) jobctl: EngineHandle,
 }
 
 impl CreateSkillView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let (submitter, mut results) = Engine::spawn(IntentHandler, 32, 1);
-        let weak = cx.weak_entity();
+        let (jobctl, mut results) = engine()
+            .register::<Intent>()
+            .queue_capacity(32)
+            .worker_threads(1)
+            .spawn();
+
         cx.spawn(async move |this: WeakEntity<CreateSkillView>, cx| {
-            while let Some((_id, outcome)) = results.recv().await {
+            while let Some(ev) = results.recv().await {
                 let Ok(()) = this.update(cx, |view, cx| {
-                    match outcome {
-                        Ok(criteria) => {
-                            view.acceptance = criteria;
+
+                    println!("ev: {:#?}", &ev);
+                    match (ev.status, ev.kind.as_str()) {
+                        (EventStatus::Progress, "intent") => {
+                            // Agent events only; provisioning progress
+                            // (VM plumbing) is intentionally not surfaced.
+                            if let Ok(agent_event) =
+                                serde_json::from_value::<AgentEvent>(ev.payload)
+                            {
+                                match agent_event {
+                                    AgentEvent::Criteria { items } => {
+                                        view.acceptance = items.clone();
+                                        view.push_log(format!("\u{2691} {items:?}"));
+                                    }
+                                    AgentEvent::Done { summary } => {
+                                        view.push_log(format!("\u{2713} {summary}"));
+                                    }
+                                    AgentEvent::Failed { error } => {
+                                        view.push_log(format!("\u{2715} {error}"));
+                                    }
+                                }
+                            }
                         }
-                        Err(e) => {
-                            view.error.push(e);
+                        (EventStatus::Done, "intent") => {
+                            if let Ok(out) = serde_json::from_value::<IntentOutput>(ev.payload) {
+                                view.acceptance = out.criteria;
+                                if let Some(summary) = out.summary {
+                                    view.push_log(format!("agent: {summary}"));
+                                }
+                            }
                         }
+                        (EventStatus::Failed, kind) => {
+                            let msg = ev
+                                .payload
+                                .get("error")
+                                .and_then(|e| e.as_str())
+                                .unwrap_or("unknown error")
+                                .to_string();
+                            view.error.push(format!("{kind}: {msg}"));
+                            view.push_log(format!("\u{2715} {kind}: {msg}"));
+                        }
+                        _ => {}
                     }
                     cx.notify();
                 }) else { break;};
@@ -60,8 +101,17 @@ impl CreateSkillView {
             }),
             acceptance: Vec::new(),
             error: Vec::new(),
+            agent_log: Vec::new(),
             drafts: Vec::new(),
-            jobctl: submitter,
+            jobctl,
+        }
+    }
+
+    /// Append a line to the agent log, keeping the most recent 300.
+    pub(crate) fn push_log(&mut self, line: String) {
+        self.agent_log.push(line);
+        if self.agent_log.len() > 300 {
+            self.agent_log.remove(0);
         }
     }
 

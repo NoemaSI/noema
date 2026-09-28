@@ -9,6 +9,10 @@ use vm::{Error, ExecEvent, ExecOptions, ExecResult, Port, Vm};
 /// Host port forwarded to the guest's sshd by `vmctl up`.
 const SSH_HOST_PORT: u16 = 2222;
 const SSH_GUEST_PORT: u16 = 22;
+/// Host port forwarded to the guest's agentctl server by `vmctl up`. Must
+/// match `jobctl::jobs::ensure_vm::AGENT_{HOST,GUEST}_PORT`.
+const AGENT_HOST_PORT: u16 = 3333;
+const AGENT_GUEST_PORT: u16 = 3333;
 
 /// Set from `-d`/`--debug`; gates all diagnostic output.
 static DEBUG: AtomicBool = AtomicBool::new(false);
@@ -156,7 +160,8 @@ let vm = match Vm::attach(name) {
                 .overlay_gib(1)
                 .storage_gib(1)
                 .persistent(true)
-                .port(Port::new(SSH_HOST_PORT, SSH_GUEST_PORT));
+                .port(Port::new(SSH_HOST_PORT, SSH_GUEST_PORT))
+                .port(Port::new(AGENT_HOST_PORT, AGENT_GUEST_PORT));
             match Vm::spawn(builder) {
                 Ok(vm) => vm,
                 Err(create_err) => {

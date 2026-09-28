@@ -3,7 +3,6 @@ use gpui_kit::component::Theme;
 use gpui_kit::*;
 
 use super::create_skill_view::CreateSkillView;
-use jobctl::intent::IntentJob;
 use super::wizard::{define_form_fields, RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::skill::wizard::INITIAL_ROLE_DRAFT;
@@ -77,11 +76,14 @@ impl WizardStep for DefineSkillStep {
                 move |_, _, app| {
                     entity.update(app, |this, cx| {
                         this.error.clear();
-                        let job = IntentJob {
-                            name: this.name_input.read(cx).value().to_string(),
-                            goal: this.goal_input.read(cx).value().to_string(),
-                        };
-                        let _ = this.jobctl.submit(job);
+                        this.agent_log.clear();
+                        this.acceptance.clear();
+                        let name = this.name_input.read(cx).value().to_string();
+                        let goal = this.goal_input.read(cx).value().to_string();
+                        match this.jobctl.analyze_intent(name.clone(), goal.clone()) {
+                            Ok(id) => this.push_log(format!("→ analyze submitted (root {id})")),
+                            Err(err) => this.push_log(format!("\u{2715} submit failed: {err}")),
+                        }
                         this.phase = WizardPhase::IntentAnalysis;
                         cx.notify();
                     });

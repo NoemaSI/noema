@@ -2,15 +2,15 @@
 
 use std::future::Future;
 
-use agentctl::server::{AgentHandler, Emit};
-use agentctl::{AgentEvent, AgentRequest};
+use crate::server::{AgentHandler, Emit};
+use crate::{AgentEvent, AgentRequest};
 
 /// Stub goal run: pretends to analyse, plan, and execute.
 /// rig + opencode (A2A) will drive the real events here later.
 pub struct GoalRun;
 
 impl AgentHandler for GoalRun {
-    const NAME: &'static str = agentctl::GOAL_HANDLER;
+    const NAME: &'static str = crate::GOAL_HANDLER;
     const DESCRIPTION: &'static str = "Execute the skill goal (stub; rig + opencode later)";
 
     type Payload = AgentRequest;

@@ -31,6 +31,8 @@ pub enum AgentEvent {
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod handlers;
+#[cfg(feature = "server")]
 pub mod server;
 
 #[cfg(feature = "client")]

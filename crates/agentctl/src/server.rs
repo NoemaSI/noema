@@ -105,6 +105,22 @@ impl AgentServer {
         axum::serve(listener, app).await.expect("server");
     }
 
+    /// Bind `listen` and serve from a spawned task; returns once the
+    /// listener is live. Lets embedders (jobctl's local agent mode) run the
+    /// server in-process instead of spawning a binary.
+    pub async fn spawn_serving(
+        self,
+        listen: &str,
+    ) -> Result<tokio::task::JoinHandle<()>, std::io::Error> {
+        let listener = tokio::net::TcpListener::bind(listen).await?;
+        let app = self.router();
+        Ok(tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, app).await {
+                eprintln!("agent server error: {e}");
+            }
+        }))
+    }
+
     pub fn router(self) -> Router {
         Router::new()
             .route("/healthz", get(healthz))
@@ -140,6 +156,13 @@ impl AgentServerBuilder {
 
     pub async fn serve(self, listen: &str) {
         self.build().serve(listen).await
+    }
+
+    pub async fn spawn_serving(
+        self,
+        listen: &str,
+    ) -> Result<tokio::task::JoinHandle<()>, std::io::Error> {
+        self.build().spawn_serving(listen).await
     }
 }
 

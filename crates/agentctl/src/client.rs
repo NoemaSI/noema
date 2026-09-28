@@ -112,7 +112,6 @@ impl AgentRun {
                         AgentEvent::Done { summary } => self.summary = Some(summary.clone()),
                         AgentEvent::Criteria { items } => self.criteria = items.clone(),
                         AgentEvent::Failed { error } => self.error = Some(error.clone()),
-                        _ => {}
                     }
                     self.queue.push_back(event);
                 }

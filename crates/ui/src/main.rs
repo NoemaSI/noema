@@ -31,9 +31,12 @@ static IOSKELEY_SEMIBOLD: &[u8] =
 
 pub const FONT_FAMILY: &str = "Ioskeley Mono";
 
-pub const TEXT_SM: Pixels = px(12.0);
+pub const TEXT_SM:   Pixels = px(12.0);
 pub const TEXT_BASE: Pixels = px(14.0);
-pub const TEXT_LG: Pixels = px(16.0);
+pub const TEXT_LG:   Pixels = px(16.0);
+
+const LAUNCHER_WIDTH:  Pixels = px(400.);
+const LAUNCHER_HEIGHT: Pixels = px(600.);
 
 struct AppRoot {
     route: Route,
@@ -129,13 +132,31 @@ fn main() {
         gpui_kit::init(cx);
         load_theme(cx).expect("failed to load theme");
 
+        let bounds = Bounds::centered(
+            None,
+            size(LAUNCHER_WIDTH, LAUNCHER_HEIGHT),
+            cx,
+        );
         cx.spawn(async move |cx| {
-            cx.open_window(WindowOptions::default(), |window, cx| {
-                let view = cx.new(|cx| AppRoot::new(window, cx));
-                // This first level on the window, should be a Root.
-                cx.new(|cx| Root::new(view, window, cx))
-            })
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    is_resizable: false,
+                    ..Default::default()
+                },
+                |window, cx| {
+                    let view = cx.new(|cx| AppRoot::new(window, cx));
+                    cx.new(|cx| Root::new(view, window, cx))
+                },
+            )
             .expect("Failed to open window");
+
+            // cx.open_window(WindowOptions::default(), |window, cx| {
+            //     let view = cx.new(|cx| AppRoot::new(window, cx));
+            //     // This first level on the window, should be a Root.
+            //     cx.new(|cx| Root::new(view, window, cx))
+            // })
+            // .expect("Failed to open window");
         })
         .detach();
     });

@@ -136,7 +136,11 @@ const GUEST_SSH_DIR: &str = "/opt/smol-ssh";
 
 /// Installs and prepares sshd. Waits out any apt/dpkg lock held by a
 /// concurrent install (e.g. the one `vmctl up` runs at boot).
-const SSH_INSTALL_SCRIPT: &str = "i=0; while ! (apt-get update -qq && \
+/// Guest-side truth for the openssh bootstrap: exits instantly when sshd is
+/// already present, so it is safe to run on every `up` regardless of what
+/// flaky host-side probes report right after a restart.
+const SSH_INSTALL_SCRIPT: &str = "test -x /usr/sbin/sshd && exit 0; \
+     i=0; while ! (apt-get update -qq && \
      apt-get install -y -qq --no-install-recommends openssh-server); do \
      i=$((i+1)); [ $i -ge 30 ] && exit 1; echo 'apt busy, retrying...' >&2; sleep 2; done \
      && ssh-keygen -A && mkdir -p /run/sshd /opt/smol-ssh && chmod 700 /opt/smol-ssh";
@@ -211,15 +215,11 @@ fn exec_streamed(name: &str, command: &[String]) -> vm::Result<u8> {
 /// ssh allocate the PTY.
 fn exec_tty(name: &str, command: &[String]) -> vm::Result<u8> {
     debug!("attach {name} for interactive exec");
-    let vm = Vm::attach(name)?;
-    debug!("published guest ports: {:?}", vm.inner().guest_ports());
     let key = ensure_key()?;
-    setup_sshd(&vm, &key)?;
-
     // `Machine::connect` handles do not report published ports, but the engine
-// binds the forward in the VM process, so vmctl uses the port it chose at
-// `up` time and verifies it by probing.
-let host_port = SSH_HOST_PORT;
+    // binds the forward in the VM process, so vmctl uses the port it chose at
+    // `up` time and verifies it by probing.
+    let host_port = SSH_HOST_PORT;
     debug!("host forward for guest port {SSH_GUEST_PORT}: {host_port}");
 
     // Fail fast instead of hanging: the port forward only exists if the
@@ -235,6 +235,14 @@ let host_port = SSH_HOST_PORT;
     }
     drop(probe);
     debug!("{addr} reachable");
+
+    // sshd is bootstrapped by `up`, never here; a machine that cannot answer a
+    // key-auth login was not brought up properly.
+    if !ssh_works(&key, host_port) {
+        return Err(Error::Runtime(format!(
+            "sshd on {addr} not reachable; bring the machine up with `vmctl up {name}`"
+        )));
+    }
 
     let mut ssh = Command::new("ssh");
     ssh.args([
@@ -258,6 +266,34 @@ let host_port = SSH_HOST_PORT;
     let status = ssh.status()?;
     debug!("ssh exited with {:?}", status.code());
     Ok(status.code().unwrap_or(1).clamp(0, 255) as u8)
+}
+
+/// True when a key-auth, non-interactive ssh login succeeds.
+fn ssh_works(key: &Path, host_port: u16) -> bool {
+    Command::new("ssh")
+        .args([
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=3",
+            "-o",
+            "LogLevel=ERROR",
+        ])
+        .arg("-p")
+        .arg(host_port.to_string())
+        .arg("-i")
+        .arg(key)
+        .arg("root@127.0.0.1")
+        .arg("true")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// Run a guest command with a timeout, logging it under `--debug`.
@@ -349,13 +385,18 @@ fn ensure_key() -> vm::Result<PathBuf> {
 /// Make sure sshd is installed and running in the guest, with our key in
 /// authorized_keys. Each step is skipped when already satisfied.
 fn setup_sshd(vm: &Vm, key: &Path) -> vm::Result<()> {
+    // Fast path only: a clean "yes" skips the step so `up` stays quiet.
+    // Anything else runs the script, which exits instantly when sshd is
+    // already present — the guest is the authority, not this probe.
     let present = guest_exec(
         vm,
         "test -x /usr/sbin/sshd && echo yes || echo no",
         Duration::from_secs(10),
-    )?;
-    if present.stdout_utf8().trim() != "yes" {
-        debug!("openssh missing in guest, installing");
+    )
+    .map(|r| r.stdout_utf8().trim().to_string())
+    .unwrap_or_default();
+    if present != "yes" {
+        debug!("openssh presence probe said {present:?}; running guarded install");
         let install = guest_step(vm, "install openssh", SSH_INSTALL_SCRIPT, Duration::from_secs(300))?;
         if !install.success() {
             return Err(Error::Runtime(format!(

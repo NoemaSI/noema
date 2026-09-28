@@ -134,6 +134,15 @@ impl Vm {
 
     /// Shut the machine down, keeping its disks.
     pub fn stop(&self) -> Result<()> {
+        // `stop` kills the VM abruptly; anything still in the guest page
+        // cache would be lost, so flush it first. Best effort: a guest that
+        // does not answer cannot be helped by a sync anyway.
+        if self.is_running() {
+            let _ = self.exec_with(
+                ["sh", "-c", "sync"],
+                ExecOptions::new().timeout(std::time::Duration::from_secs(30)),
+            );
+        }
         self.machine.stop()?;
         Ok(())
     }

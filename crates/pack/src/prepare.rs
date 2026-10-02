@@ -30,7 +30,7 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use rig_agent::tool::DynamicTool;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -601,7 +601,7 @@ pub fn run_proposal(
 
     let raw_dir = std::fs::canonicalize(&raw_dir).unwrap_or(raw_dir);
 
-    let config = maybe_llm_config.into().map(Ok).unwrap_or_else(LlmConfig::from_env())?;
+    let config = maybe_llm_config.into().map(Ok).unwrap_or_else(LlmConfig::from_env)?;
 
     #[cfg(feature = "viewer")]
     crate::viewer::serve_local();
@@ -645,7 +645,7 @@ pub fn run_proposal(
 /// Legacy entry: `skill new prepare --session=…` for sessions the
 /// interview already filled with declared channels.
 pub fn prepare(session_arg: &str) -> Result<()> {
-    run_proposal(session_arg, None)?;
+    run_proposal(session_arg, None, None)?;
 
     println!("skill: mapping committed; check packs/…/preview.png");
 
@@ -906,7 +906,7 @@ pub fn new_flow() -> Result<()> {
     println!("skill: (its work streams to the terminal; Ctrl-C is always safe —");
     println!("skill:  nothing is approved until you say so at the review below)");
 
-    run_proposal(&session_path.display().to_string(), None)?;
+    run_proposal(&session_path.display().to_string(), None, None)?;
 
     gate(&session_path)
 }

@@ -22,6 +22,7 @@
 //!
 //! > The model author controls model structure. The harness controls
 //! > reality.
+use anyhow::bail;
 use noema_config::NoemaConfig;
 use std::path::Path;
 
@@ -137,7 +138,7 @@ pub fn new_skill_pack_llm_guided(
             "The scientist supplied only the path and the problem. Explore the data \
              and propose the complete reading yourself.".to_string(),
         ),
-        data: author::DataSpec { path, delimiter: ',' },
+        data: author::DataSpec { path: data_dir.display().to_string(), delimiter: ',' },
         mapping: ColumnMap {
             subject: None,
             curve: vec![],
@@ -150,10 +151,10 @@ pub fn new_skill_pack_llm_guided(
     };
 
     author::write_session(&session_path, &session)?;
-    run_proposal(
+    prepare::run_proposal(
         &session_path.display().to_string(),
         None,
-        config.llm,
+        Some((&config.llm).into()),
 
     )?;
 

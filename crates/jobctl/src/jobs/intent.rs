@@ -54,15 +54,15 @@ impl JobDefinition for Intent {
             }
 
             // Bring up the agent server: local host process by default, VM when
-    // NOEMA_VM=1 (engine disk persistence is currently unreliable).
-            let vm = if std::env::var_os("NOEMA_VM").is_some() {
+            // NOEMA_VM=1 (engine disk persistence is currently unreliable).
+            let agent_backend = if std::env::var_os("NOEMA_VM").is_some() {
                 provision(ctx.clone(), services.clone()).await?
             } else {
                 crate::jobs::local::ensure_local_agent(&ctx).await?
             };
 
             // Run the goal on the guest agent, streaming its events.
-            let client = AgentClient::new(vm.http_base);
+            let client = AgentClient::new(agent_backend.http_base);
             let mut run = client
                 .run_goal(AgentRequest {
                     goal: format!("{}: {}", payload.name, payload.goal),

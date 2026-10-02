@@ -35,6 +35,9 @@ pub mod handlers;
 #[cfg(feature = "server")]
 pub mod server;
 
+#[cfg(feature = "server")]
+pub mod agent_factory;
+
 #[cfg(feature = "client")]
 pub use client::{AgentClient, AgentError, AgentRun};
 #[cfg(feature = "server")]

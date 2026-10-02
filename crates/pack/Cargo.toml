@@ -1,0 +1,33 @@
+[package]
+name = "pack"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+noema-config = { workspace  = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = {workspace = true }
+tokio = { workspace = true }
+
+base64 = "0.22"
+csv = "1.3"
+futures = "0.3"
+libloading = "0.8"
+modelica = { path = "../../../opti/modelica" }
+reloaded-code-core = { version = "0.3.0", path = "../../../opti/crates/ReloadedCode/src/reloaded-code-core/" }
+reloaded-code-serdesai = { version = "0.3.0", path = "../../../opti/crates/ReloadedCode/src/reloaded-code-serdesai" }
+rig = "0.41.0"
+rig-agent = "0.41.0"
+rig-core = { version = "0.41.0", features = ["test-utils"] }
+schemars = "1.2.2"
+serdes-ai = "0.2.6"
+ureq = { version = "3", features = ["json"] }
+
+[features]
+# SSE debug viewer (skill/src/viewer.rs): the agent streams and the
+# loop's lifecycle notes are published to a browser at
+# http://127.0.0.1:9935/ while `skill evolve` runs.
+viewer = ["tokio/net", "tokio/io-util", "tokio/sync", "tokio/time"]
+
+

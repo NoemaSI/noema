@@ -20,6 +20,9 @@ impl AgentHandler for GoalRun {
         emit: Emit,
     ) -> impl Future<Output = Result<String, String>> + Send {
         async move {
+            // TODO: boot rig agent
+            // TODO: this time we need to read configuration
+
             // Stub intent analysis: the agent derives acceptance criteria
             // from the goal. rig + opencode will replace this whole body.
             tokio::time::sleep(std::time::Duration::from_millis(800)).await;

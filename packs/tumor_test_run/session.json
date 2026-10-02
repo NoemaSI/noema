@@ -1,0 +1,23 @@
+{
+  "name": "tumor_test_run",
+  "problem_statement": "how tumour volume over 60 days responds to a single administered dose, across five cell lines",
+  "baseline_hint": null,
+  "prepare_brief": "The scientist supplied only the path and the problem. Explore the data and propose the complete reading yourself.",
+  "data": {
+    "path": "/Users/korny/NOEMA/data_in/tumor_test_run",
+    "delimiter": ","
+  },
+  "mapping": {
+    "subject": null,
+    "curve": [],
+    "time": null,
+    "drives": [],
+    "outputs": [],
+    "condition_column": null
+  },
+  "split": {
+    "train": [],
+    "validation": [],
+    "hidden": []
+  }
+}

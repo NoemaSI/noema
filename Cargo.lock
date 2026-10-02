@@ -8516,6 +8516,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serdes-ai",
+ "tempfile",
  "tokio",
  "ureq 3.4.2",
 ]

@@ -24,7 +24,7 @@
 //! > reality.
 use anyhow::bail;
 use noema_config::NoemaConfig;
-use std::path::Path;
+use std::{fs::{copy, create_dir_all}, path::{Path, PathBuf}};
 
 
 pub mod agent;
@@ -110,19 +110,45 @@ impl AsRef<str> for SkillpackIdentifier {
     }
 }
 
+/// returns the directory for pack data inputs
+pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> PathBuf {
+    config.workdir.join(PACK_DATA_INP_DIR).join(namespace)
+}  
 
+/// copies uploaded files into the skill workdir in preparation of llm guided pack creation
+pub fn copy_uploaded_files_to_pack_input_dir(
+    files_uploaded: &Vec<String>,
+    skillpack_identifier: &SkillpackIdentifier,
+    config: &NoemaConfig,
+) -> Result<(), anyhow::Error>{
+    let as_paths = files_uploaded.iter().map(|f|  PathBuf::from(f)).collect::<Vec<PathBuf>>();
+    for path in as_paths {
+        if !path.is_file() {
+            bail!("{} is not a file", &path.display());
+        }
+        let from = path.clone();
+        let to_folder   = pack_data_input_dir(&config, skillpack_identifier.as_str());
+        create_dir_all(&to_folder)?;
+
+        let dest_file = to_folder.join(path.file_name().expect("cant extract file name"));
+        copy(from, dest_file)?;
+    }
+
+    Ok(())
+}
 /// creates a new skill pack using the LLM to read data and interpret it
 pub fn new_skill_pack_llm_guided(
-    identifier: SkillpackIdentifier,
+    skillpack_identifier: SkillpackIdentifier,
     problem_description: String,
     baseline_hint: Option<String>,
     config: NoemaConfig,
 ) -> Result<(), anyhow::Error> {
-    let name = identifier.as_str();
-    let data_dir = &config.workdir.join(PACK_DATA_INP_DIR);
+    let name = skillpack_identifier.as_str();
+    let data_dir = pack_data_input_dir(&config, &name);
 
     let dir = std::path::Path::new(PACK_DATA_OUT_DIR).join(&name);
-    std::fs::create_dir_all(&dir)?;
+    println!("creating dir: {}", &dir.display());
+    create_dir_all(&dir)?;
 
     let session_path = dir.join("session.json");
 
@@ -163,7 +189,23 @@ pub fn new_skill_pack_llm_guided(
 
 #[cfg(test)]
 mod tests {
-    use super::SkillpackIdentifier;
+    use std::path::PathBuf;
+    use noema_config::{LlmConfig, NoemaConfig};
+    use super::*;
+
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn gen_noema_config() -> NoemaConfig {
+        NoemaConfig {
+            llm: LlmConfig {
+                model_name: "gpt-4o".to_string(),
+                api_key: Some("sk-...".to_string()),
+                endpoint: "https://api.openai.com/v1".to_string(),
+            },
+            workdir: PathBuf::from("/path/to/workdir"),
+        }
+    }
 
     #[test]
     fn accepts_letters() {
@@ -211,6 +253,84 @@ mod tests {
     fn rejects_unicode_characters() {
         assert!(SkillpackIdentifier::new("café").is_err());
         assert!(SkillpackIdentifier::new("こんにちは").is_err());
+    }
+
+    #[test]
+    fn returns_skilldata_input_dir() {
+        let config = gen_noema_config();
+        let inpt_dir = pack_data_input_dir(&config, "foobar");
+        assert_eq!(inpt_dir, PathBuf::from("/path/to/workdir/data_in/foobar"));
+    }
+
+        use super::*;
+
+    #[test]
+    fn copies_single_uploaded_file() {
+        let skillpack_id = SkillpackIdentifier::new("foo_bar").expect("unable to create skillpack id");
+        let mut config = gen_noema_config();
+        let source_dir = tempdir().expect("could not create temp directory");
+        let source_path = source_dir.path().join("uploaded.txt");
+
+        config.workdir = tempdir().expect("could not create temp directory").path().to_path_buf();
+
+        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar");
+        let destination_path = packdata_inpt_dir.join("uploaded.txt");
+
+        let contents = b"test uploaded file contents";
+        fs::write(&source_path, contents).expect("could not create source file");
+
+        let files_uploaded = vec![source_path.display().to_string()];
+        copy_uploaded_files_to_pack_input_dir(
+            &files_uploaded,
+            &skillpack_id,
+            &config
+        ).expect("could not copy files");
+
+        assert!(destination_path.exists());
+
+        let copied_contents =
+            fs::read(&destination_path).expect("could not read copied file");
+
+        assert_eq!(copied_contents, contents);
+        drop(source_dir);
+        drop(config.workdir);
+    }
+
+    #[test]
+    fn copies_multiple_uploaded_files() {
+        let skillpack_id = SkillpackIdentifier::new("foo_bar").expect("unable to create skillpack id");
+        let mut config = gen_noema_config();
+        let source_dir = tempdir().expect("could not create temp directory");
+        let contents = b"test uploaded file contents";
+
+        config.workdir = tempdir().expect("could not create temp directory").path().to_path_buf();
+        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar");
+
+        let dummy_files = vec!["foo_1.txt", "foo_2.txt"];
+        let mut files_uploaded = vec![];
+
+        for f in &dummy_files {
+            let source_path = source_dir.path().join(f);
+            fs::write(&source_path, contents).expect("could not create source file");
+            files_uploaded.push(source_path.display().to_string());
+        }
+
+        copy_uploaded_files_to_pack_input_dir(
+            &files_uploaded,
+            &skillpack_id,
+            &config
+        ).expect("could not copy files");
+
+        for f in &dummy_files {
+            let dest_file = packdata_inpt_dir.join(f);
+            println!("{}", &dest_file.display());
+            assert!(dest_file.exists());
+            let copied_contents = fs::read(&dest_file).expect("could not read copied file");
+            assert_eq!(copied_contents, contents);
+        }
+
+        drop(source_dir);
+        drop(config.workdir);
     }
 }
 

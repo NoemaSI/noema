@@ -32,3 +32,5 @@ ureq = { version = "3", features = ["json"] }
 viewer = ["tokio/net", "tokio/io-util", "tokio/sync", "tokio/time"]
 
 
+[dev-dependencies]
+tempfile = "3"

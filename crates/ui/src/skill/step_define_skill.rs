@@ -2,6 +2,8 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Theme;
 use gpui_kit::*;
 
+use jobctl::jobs::create_skillpack::CreateSkillpackPayload;
+
 use super::create_skill_view::CreateSkillView;
 use super::wizard::{define_form_fields, RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
@@ -61,6 +63,14 @@ impl WizardStep for DefineSkillStep {
 
     fn actions(&self, view: &CreateSkillView, cx: &mut Context<CreateSkillView>) -> AnyElement {
         let entity = cx.entity().clone();
+
+        let filedrop = view.filedrop.read(cx);
+        let files_dropped = filedrop
+                                .dropped_paths
+                                .iter()
+                                .map(|f| f.display().to_string())
+                                .collect::<Vec<String>>();
+
         h_flex()
             .gap_x_2()
             .child(sbutton_auto(
@@ -80,7 +90,22 @@ impl WizardStep for DefineSkillStep {
                         this.acceptance.clear();
                         let name = this.name_input.read(cx).value().to_string();
                         let goal = this.goal_input.read(cx).value().to_string();
-                        match this.jobctl.analyze_intent(name.clone(), goal.clone()) {
+
+                        let payload = CreateSkillpackPayload {
+                            name: name.clone(),
+                            problem_description: goal.clone(),
+                            baseline_hint: None,
+                            files_dropped: files_dropped.clone(),
+                            config: match noema_config::NoemaConfig::from_home() {
+                                Ok(config) => config,
+                                Err(err) => {
+                                    this.push_log(format!("\u{2715} config error: {err}"));
+                                    return;
+                                }
+                            },
+                        };
+
+                        match this.jobctl.create_skillpack(payload) {
                             Ok(id) => this.push_log(format!("→ analyze submitted (root {id})")),
                             Err(err) => this.push_log(format!("\u{2715} submit failed: {err}")),
                         }

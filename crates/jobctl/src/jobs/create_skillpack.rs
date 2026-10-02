@@ -1,5 +1,6 @@
 
 use std::future::Future;
+use std::path::PathBuf;
 
 use agentctl::{AgentClient, AgentEvent, AgentRequest};
 use noema_config::NoemaConfig;
@@ -15,11 +16,12 @@ use pack;
 /// single event stream.
 pub struct CreateSkillpack;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSkillpackPayload {
     pub name: String,
     pub problem_description: String,
     pub baseline_hint: Option<String>,
+    pub files_dropped: Vec<String>,
     pub config: NoemaConfig,
 }
 
@@ -53,11 +55,17 @@ impl JobDefinition for CreateSkillpack {
         payload: Self::Payload,
         services: Services,
     ) -> impl Future<Output = Result<Self::Output, EngineError>> + Send {
+
+
         async move {
             let safe_name = &payload.name.trim().to_ascii_lowercase().replace(' ', "_");
+            if payload.files_dropped.is_empty() {
+                return Err(EngineError::JobFailed(format!("please provide task specific data by dropping one one or multiple files into the file upload field.")));
+            }
 
             match pack::SkillpackIdentifier::new(&*safe_name) {
                 Ok(skill_identifier) => {
+                    let _ = pack::copy_uploaded_files_to_pack_input_dir(&payload.files_dropped, &skill_identifier, &payload.config);
                     let skill_pack = pack::new_skill_pack_llm_guided(skill_identifier, payload.problem_description, payload.baseline_hint, payload.config);
                 }
                 Err(e) => {
@@ -74,11 +82,13 @@ impl JobDefinition for CreateSkillpack {
 }
 
 impl EngineHandle {
-    /// Typed façade for the UI: start an intent analysis for `name` & `goal`.
-    pub fn create_skillpack(&self, name: String, goal: String) -> Result<JobId, EngineError> {
+    /// Typed façade for the UI: start a skillpack creation.
+    /// The payload is serialized here so the wire format is always in sync
+    /// with `CreateSkillpackPayload` (no hand-built JSON).
+    pub fn create_skillpack(&self, payload: CreateSkillpackPayload) -> Result<JobId, EngineError> {
         self.try_submit(
             CreateSkillpack::KIND,
-            serde_json::json!({ "name": name, "goal": goal }),
+            serde_json::to_value(&payload)?,
         )
     }
 }

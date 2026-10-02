@@ -4,9 +4,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
-use jobctl::jobs::intent::{Intent, IntentOutput};
+use jobctl::jobs::create_skillpack::{CreateSkillpack,CreateSkillpackOutput};
 use jobctl::protocol::AgentEvent;
-use jobctl::{engine, EngineHandle, EventStatus};
+use jobctl::{EngineHandle, EventStatus, JobDefinition, engine};
 
 use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
@@ -34,7 +34,7 @@ pub struct CreateSkillView {
 impl CreateSkillView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (jobctl, mut results) = engine()
-            .register::<Intent>()
+            .register::<CreateSkillpack>()
             .queue_capacity(32)
             .worker_threads(1)
             .spawn();
@@ -45,7 +45,7 @@ impl CreateSkillView {
 
                     println!("ev: {:#?}", &ev);
                     match (ev.status, ev.kind.as_str()) {
-                        (EventStatus::Progress, "intent") => {
+                        (EventStatus::Progress, CreateSkillpack::KIND) => {
                             // Agent events only; provisioning progress
                             // (VM plumbing) is intentionally not surfaced.
                             if let Ok(agent_event) =
@@ -65,8 +65,8 @@ impl CreateSkillView {
                                 }
                             }
                         }
-                        (EventStatus::Done, "intent") => {
-                            if let Ok(out) = serde_json::from_value::<IntentOutput>(ev.payload) {
+                        (EventStatus::Done, CreateSkillpack::KIND) => {
+                            if let Ok(out) = serde_json::from_value::<CreateSkillpackOutput>(ev.payload) {
                                 view.acceptance = out.criteria;
                                 if let Some(summary) = out.summary {
                                     view.push_log(format!("agent: {summary}"));

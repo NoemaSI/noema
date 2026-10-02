@@ -66,7 +66,14 @@ impl JobDefinition for CreateSkillpack {
             match pack::SkillpackIdentifier::new(&*safe_name) {
                 Ok(skill_identifier) => {
                     let _ = pack::copy_uploaded_files_to_pack_input_dir(&payload.files_dropped, &skill_identifier, &payload.config);
-                    let skill_pack = pack::new_skill_pack_llm_guided(skill_identifier, payload.problem_description, payload.baseline_hint, payload.config);
+                    // Blocking call (creates its own tokio runtime internally);
+                    // must not run on a jobctl worker thread.
+                    let skill_pack = tokio::task::spawn_blocking(move || {
+                        pack::new_skill_pack_llm_guided(skill_identifier, payload.problem_description, payload.baseline_hint, payload.config)
+                    })
+                    .await
+                    .map_err(|e| EngineError::JobFailed(format!("skillpack task panicked: {e}")))?
+                    .map_err(|e| EngineError::JobFailed(format!("{e:#}")))?;
                 }
                 Err(e) => {
                     return Err(EngineError::JobFailed(format!("unable to construct skillpack: {e}")))

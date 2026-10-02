@@ -10,3 +10,4 @@
 # Local identity material (contains secret keys!)
 deps/
 .noema/
+packs/**

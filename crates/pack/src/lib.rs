@@ -115,6 +115,11 @@ pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> PathBuf {
     config.workdir.join(PACK_DATA_INP_DIR).join(namespace)
 }  
 
+/// returns the directory for pack data outputs
+pub fn pack_data_output_dir(config: &NoemaConfig, namespace: &str) -> PathBuf {
+    config.workdir.join(PACK_DATA_OUT_DIR).join(namespace)
+}  
+
 /// copies uploaded files into the skill workdir in preparation of llm guided pack creation
 pub fn copy_uploaded_files_to_pack_input_dir(
     files_uploaded: &Vec<String>,
@@ -146,7 +151,7 @@ pub fn new_skill_pack_llm_guided(
     let name = skillpack_identifier.as_str();
     let data_dir = pack_data_input_dir(&config, &name);
 
-    let dir = std::path::Path::new(PACK_DATA_OUT_DIR).join(&name);
+    let dir = pack_data_output_dir(&config, &name);
     println!("creating dir: {}", &dir.display());
     create_dir_all(&dir)?;
 
@@ -262,7 +267,12 @@ mod tests {
         assert_eq!(inpt_dir, PathBuf::from("/path/to/workdir/data_in/foobar"));
     }
 
-        use super::*;
+    #[test]
+    fn returns_skilldata_output_dir() {
+        let config = gen_noema_config();
+        let inpt_dir = pack_data_output_dir(&config, "foobar");
+        assert_eq!(inpt_dir, PathBuf::from("/path/to/workdir/packs/foobar"));
+    }
 
     #[test]
     fn copies_single_uploaded_file() {

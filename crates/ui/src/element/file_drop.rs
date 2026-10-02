@@ -31,15 +31,22 @@ impl FileDropView {
 
 impl Render for FileDropView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dropped = self.dropped_paths.clone();
+        let content = if dropped.is_empty() {
+            div().child("Drop files here")
+        } else {
+            div().child(format!("{} files dropped", dropped.len())).children(
+                dropped
+                    .iter()
+                    .map(|path| div().child(path.display().to_string())),
+            )
+        };
+
         div()
             .id("file-drop")
             .size_full()
             .bg(if self.drag_hovering { rgb(0x4488ff) } else { rgb(0xeeeeee) })
-            .child(if self.dropped_paths.is_empty() {
-                "Drop files here".to_string()
-            } else {
-                format!("{} files dropped", self.dropped_paths.len())
-            })
+            .child(content)
             .on_hover(cx.listener(|this, hovering, _window, cx| {
                 this.drag_hovering = *hovering;
                 cx.notify();
@@ -49,8 +56,12 @@ impl Render for FileDropView {
                 cx.notify();
             }))
             .on_drop::<ExternalPaths>(cx.listener(|this, paths: &ExternalPaths, window, cx| {
-                this.dropped_paths = paths.paths().to_vec();
                 this.drag_hovering = false;
+                for path in paths.paths() {
+                    if !this.dropped_paths.contains(path) {
+                        this.dropped_paths.push(path.clone());
+                    }
+                }
                 let dropped = this.dropped_paths.clone();
                 if let Some(on_drop) = this.on_drop.as_ref() {
                     on_drop(dropped, window, cx);

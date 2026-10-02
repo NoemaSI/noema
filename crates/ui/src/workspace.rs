@@ -1,9 +1,11 @@
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::component::*;
 use gpui_kit::gpui::{InteractiveElement, StatefulInteractiveElement};
 use gpui_kit::*;
+use noema_config::{NOEMA_CONFIG_FILE, NoemaConfig, noema_path};
 
 use crate::market::market_view::MarketView;
 use crate::not_logged_in::NOEMA_LOGO;
@@ -23,13 +25,18 @@ enum WorkspaceItem {
 pub struct Workspace {
     logo: Image,
     selected: WorkspaceItem,
+    config: NoemaConfig,
 }
 
 impl Workspace {
     pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+        let noema_path = noema_path().expect("unable to read noema path");
+        let config = NoemaConfig::from_home().expect(format!("unable to read config file from {}", noema_path.join(NOEMA_CONFIG_FILE).display()).as_str());
+
         Self {
             logo: Image::from_bytes(ImageFormat::Png, NOEMA_LOGO.to_vec()),
             selected: WorkspaceItem::EvolveResearch,
+            config
         }
     }
 

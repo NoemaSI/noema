@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+noema-config = { workspace = true }
 agentctl = { version = "0.1.0", path = "../agentctl", features = ["client", "server"] }
+pack = { path = "../pack/"}
 async-channel = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

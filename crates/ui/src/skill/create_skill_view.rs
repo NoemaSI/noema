@@ -10,6 +10,7 @@ use jobctl::{EngineHandle, EventStatus, JobDefinition, engine};
 
 use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
+use crate::element::file_drop::FileDropView;
 use crate::{FONT_FAMILY, TEXT_SM};
 
 pub struct SkillDraft {
@@ -29,6 +30,7 @@ pub struct CreateSkillView {
     pub(crate) agent_log: Vec<String>,
     pub(crate) drafts: Vec<SkillDraft>,
     pub(crate) jobctl: EngineHandle,
+    pub(crate) filedrop: Entity<FileDropView>
 }
 
 impl CreateSkillView {
@@ -99,6 +101,7 @@ impl CreateSkillView {
                     .placeholder("what should this skill do, in plain words?")
                     .rows(3)
             }),
+            filedrop: cx.new(|cx| FileDropView::new()),
             acceptance: Vec::new(),
             error: Vec::new(),
             agent_log: Vec::new(),
@@ -261,6 +264,7 @@ impl CreateSkillView {
                     .child("Certified skills: (none)"),
             )
     }
+
 
     fn render_queue_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();

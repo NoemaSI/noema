@@ -299,6 +299,11 @@ pub fn pill(label: impl Into<SharedString>, border: Hsla, fg: Hsla) -> Div {
         .child(label.into())
 }
 
+pub fn render_filedrop(view: &CreateSkillView, theme: &Theme) -> Div {
+    v_flex()
+        .child(view.filedrop.clone())
+}
+
 /// SKILL NAME / GOAL / ACCEPTANCE CRITERIA fields shared by the DefineSkill
 /// and IntentAnalysis steps. `analysed` switches to the agent-proposed view.
 pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool) -> Div {
@@ -346,6 +351,7 @@ pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool)
                             ))
                         }),
                 )
+                .child(render_filedrop(&view, &theme))
                 .child(
                     h_flex()
                         .gap_x_2()

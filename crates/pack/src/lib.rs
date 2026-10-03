@@ -64,7 +64,7 @@ pub use base64;
 pub use csv;
 pub use serde_json;
 
-use crate::author::{AuthorSession, ColumnMap};
+use crate::author::{AuthorSession, ColumnMap, draft};
 
 /// Repository root (the directory holding `assets/`). Delegates to
 /// [`modelica::workspace_root`] (compile-time manifest parent,
@@ -76,6 +76,7 @@ pub fn workspace_root() -> std::path::PathBuf {
 
 pub const PACK_DATA_INP_DIR: &str = "data_in";
 pub const PACK_DATA_OUT_DIR: &str = "packs";
+pub const PACK_SESSION_DRAFT_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillpackIdentifier(String);
@@ -110,14 +111,22 @@ impl AsRef<str> for SkillpackIdentifier {
     }
 }
 
-/// returns the directory for pack data inputs
-pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> PathBuf {
-    config.workdir.join(PACK_DATA_INP_DIR).join(namespace)
+/// returns the directory for pack data inputs that is going to be created. Will error if it already exists.
+pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> Result<PathBuf, anyhow::Error> {
+    let dir = config.workdir.join(PACK_DATA_INP_DIR).join(namespace);
+    if dir.exists() {
+        bail!("a folder with the name {namespace} already exists at the target location. Please rename your skillpack");
+    }
+    Ok(dir)
 }  
 
-/// returns the directory for pack data outputs
-pub fn pack_data_output_dir(config: &NoemaConfig, namespace: &str) -> PathBuf {
-    config.workdir.join(PACK_DATA_OUT_DIR).join(namespace)
+/// returns the directory for pack data outputs that is going to be created. Will error if it already exists.
+pub fn pack_data_output_dir(config: &NoemaConfig, namespace: &str) -> Result<PathBuf, anyhow::Error> {
+    let dir = config.workdir.join(PACK_DATA_OUT_DIR).join(namespace);
+    if dir.exists() {
+        bail!("a folder with the name {namespace} already exists at the target location. Please rename your skillpack");
+    }
+    Ok(dir)
 }  
 
 /// copies uploaded files into the skill workdir in preparation of llm guided pack creation
@@ -132,7 +141,7 @@ pub fn copy_uploaded_files_to_pack_input_dir(
             bail!("{} is not a file", &path.display());
         }
         let from = path.clone();
-        let to_folder   = pack_data_input_dir(&config, skillpack_identifier.as_str());
+        let to_folder   = pack_data_input_dir(&config, skillpack_identifier.as_str())?;
         create_dir_all(&to_folder)?;
 
         let dest_file = to_folder.join(path.file_name().expect("cant extract file name"));
@@ -149,9 +158,9 @@ pub fn new_skill_pack_llm_guided(
     config: NoemaConfig,
 ) -> Result<(), anyhow::Error> {
     let name = skillpack_identifier.as_str();
-    let data_dir = pack_data_input_dir(&config, &name);
+    let data_dir = pack_data_input_dir(&config, &name)?;
 
-    let dir = pack_data_output_dir(&config, &name);
+    let dir = pack_data_output_dir(&config, &name)?;
     println!("creating dir: {}", &dir.display());
     create_dir_all(&dir)?;
 
@@ -189,6 +198,20 @@ pub fn new_skill_pack_llm_guided(
 
     )?;
 
+    Ok(())
+}
+
+/// Draft the pack's baseline `mechanism.json`: one reasoning agent,
+/// context-injected (digest + preview image + the scientist's
+/// textbook-model hint), repaired against `validate`/`lower` errors
+/// up to `tries` times. No tools, no file access.
+pub fn draft_skill_pack_llm_guided(session_path: &str) -> Result<(), anyhow::Error> {
+    // let session_text = std::fs::read_to_string(&session_path)
+    //     .map_err(|error| format!("reading {path}: {error}"))?;
+    // let session: AuthorSession = serde_json::from_str(&session_text)
+    //     .map_err(|error| format!("parsing {session_path}: {error}"))?;
+    // draft(&session, PACK_SESSION_DRAFT_ATTEMPTS).map_err(|error| format!("{error:#}"))
+    todo!();
     Ok(())
 }
 
@@ -263,14 +286,38 @@ mod tests {
     #[test]
     fn returns_skilldata_input_dir() {
         let config = gen_noema_config();
-        let inpt_dir = pack_data_input_dir(&config, "foobar");
+        let inpt_dir = pack_data_input_dir(&config, "foobar").expect("unable to use this dir");
         assert_eq!(inpt_dir, PathBuf::from("/path/to/workdir/data_in/foobar"));
+    }
+
+    #[test]
+    fn bails_when_pack_input_dir_already_exists() {
+        let mut config = gen_noema_config();
+        let existing_dir = tempdir().expect("could not create temp directory");
+        config.workdir = existing_dir.path().to_path_buf();
+        std::fs::create_dir_all(existing_dir.path().join(PACK_DATA_INP_DIR).join("foo_bar")).expect("unable to create dir");
+        let inpt_dir = pack_data_input_dir(&config, "foo_bar");
+        assert_eq!(inpt_dir.is_err(), true);
+        assert_eq!(inpt_dir.unwrap_err().to_string(), "a folder with the name foo_bar already exists at the target location. Please rename your skillpack");
+        drop(existing_dir);
+    }
+
+    #[test]
+    fn bails_when_pack_output_dir_already_exists() {
+        let mut config = gen_noema_config();
+        let existing_dir = tempdir().expect("could not create temp directory");
+        config.workdir = existing_dir.path().to_path_buf();
+        std::fs::create_dir_all(existing_dir.path().join(PACK_DATA_OUT_DIR).join("foo_bar")).expect("unable to create dir");
+        let inpt_dir = pack_data_output_dir(&config, "foo_bar");
+        assert_eq!(inpt_dir.is_err(), true);
+        assert_eq!(inpt_dir.unwrap_err().to_string(), "a folder with the name foo_bar already exists at the target location. Please rename your skillpack");
+        drop(existing_dir);
     }
 
     #[test]
     fn returns_skilldata_output_dir() {
         let config = gen_noema_config();
-        let inpt_dir = pack_data_output_dir(&config, "foobar");
+        let inpt_dir = pack_data_output_dir(&config, "foobar").expect("unable to use this folder");
         assert_eq!(inpt_dir, PathBuf::from("/path/to/workdir/packs/foobar"));
     }
 
@@ -283,7 +330,7 @@ mod tests {
 
         config.workdir = tempdir().expect("could not create temp directory").path().to_path_buf();
 
-        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar");
+        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar").expect("unable to use this dir");
         let destination_path = packdata_inpt_dir.join("uploaded.txt");
 
         let contents = b"test uploaded file contents";
@@ -314,7 +361,7 @@ mod tests {
         let contents = b"test uploaded file contents";
 
         config.workdir = tempdir().expect("could not create temp directory").path().to_path_buf();
-        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar");
+        let packdata_inpt_dir = pack_data_input_dir(&config, "foo_bar").expect("unable to use this dir");
 
         let dummy_files = vec!["foo_1.txt", "foo_2.txt"];
         let mut files_uploaded = vec![];

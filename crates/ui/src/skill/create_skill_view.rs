@@ -59,12 +59,23 @@ pub struct CreateSkillView {
 
 impl CreateSkillView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let (jobctl, mut results) = engine()
+        let (jobctl, results) = engine()
             .register::<CreateSkillpack>()
             .queue_capacity(32)
             .worker_threads(1)
             .spawn();
+        Self::with_engine(window, cx, jobctl, results)
+    }
 
+    /// Build the view on top of an already-spawned engine. Tests inject a
+    /// stub job registered under [`CreateSkillpack::KIND`] so the whole
+    /// submit → event → render path runs without touching the LLM.
+    pub(crate) fn with_engine(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        jobctl: EngineHandle,
+        mut results: jobctl::Results,
+    ) -> Self {
         cx.spawn(async move |this: WeakEntity<CreateSkillView>, cx| {
             while let Some(ev) = results.recv().await {
                 let Ok(()) = this.update(cx, |view, cx| {

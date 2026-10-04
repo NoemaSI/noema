@@ -323,7 +323,7 @@ pub fn define_form_fields(view: &CreateSkillView, theme: &Theme, analysed: bool)
                             row.child(annotation("\u{25c6} refined by agent", theme))
                         }),
                 )
-                .child(Input::new(&view.name_input).w_full().h(px(36.))),
+                .child(Input::new(&view.name_input).id("skill-name").w_full().h(px(36.))),
         )
         .child(
             v_flex()

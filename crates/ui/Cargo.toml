@@ -11,5 +11,10 @@ anyhow = { workspace = true }
 serde_json = {workspace = true}
 noema-config = { workspace = true }
 
+[features]
+# Opens the create-skill wizard directly against a stubbed jobctl engine
+# (no login, no LLM): `cargo run -p ui --release --features stub-jobs`.
+stub-jobs = []
+
 [dev-dependencies]
 gpui-kit = { version = "0.7.0", features = ["test-support"] }

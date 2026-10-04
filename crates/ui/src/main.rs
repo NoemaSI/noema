@@ -138,6 +138,30 @@ fn main() {
             cx,
         );
         cx.spawn(async move |cx| {
+            #[cfg(feature = "stub-jobs")]
+            {
+                // Preview mode: open the create-skill wizard directly against
+                // the stubbed engine (no login, no LLM).
+                let (jobctl, results) = skill::stub::spawn_stub_engine();
+                cx.open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        is_resizable: true,
+                        ..Default::default()
+                    },
+                    |window, cx| {
+                        let view = cx.new(|cx| {
+                            skill::create_skill_view::CreateSkillView::with_engine(
+                                window, cx, jobctl, results,
+                            )
+                        });
+                        cx.new(|cx| Root::new(view, window, cx))
+                    },
+                )
+                .expect("Failed to open stub wizard window");
+            }
+
+            #[cfg(not(feature = "stub-jobs"))]
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),

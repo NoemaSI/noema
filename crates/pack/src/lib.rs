@@ -115,7 +115,7 @@ impl AsRef<str> for SkillpackIdentifier {
 pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> Result<PathBuf, anyhow::Error> {
     let dir = config.workdir.join(PACK_DATA_INP_DIR).join(namespace);
     if dir.exists() {
-        bail!("a folder with the name {namespace} already exists at the target location. Please rename your skillpack");
+        bail!("a folder with the name {} already exists at the target location {}. Please rename your skillpack", namespace, dir.display());
     }
     Ok(dir)
 }  
@@ -124,7 +124,7 @@ pub fn pack_data_input_dir(config: &NoemaConfig, namespace: &str) -> Result<Path
 pub fn pack_data_output_dir(config: &NoemaConfig, namespace: &str) -> Result<PathBuf, anyhow::Error> {
     let dir = config.workdir.join(PACK_DATA_OUT_DIR).join(namespace);
     if dir.exists() {
-        bail!("a folder with the name {namespace} already exists at the target location. Please rename your skillpack");
+        bail!("a folder with the name {} already exists at the target location {}. Please rename your skillpack", namespace, dir.display());
     }
     Ok(dir)
 }  
@@ -134,34 +134,38 @@ pub fn copy_uploaded_files_to_pack_input_dir(
     files_uploaded: &Vec<String>,
     skillpack_identifier: &SkillpackIdentifier,
     config: &NoemaConfig,
-) -> Result<(), anyhow::Error>{
+) -> Result<PathBuf, anyhow::Error>{
+
+    let to_folder   = pack_data_input_dir(&config, skillpack_identifier.as_str())?;
     let as_paths = files_uploaded.iter().map(|f|  PathBuf::from(f)).collect::<Vec<PathBuf>>();
     for path in as_paths {
         if !path.is_file() {
             bail!("{} is not a file", &path.display());
         }
         let from = path.clone();
-        let to_folder   = pack_data_input_dir(&config, skillpack_identifier.as_str())?;
         create_dir_all(&to_folder)?;
 
         let dest_file = to_folder.join(path.file_name().expect("cant extract file name"));
         copy(from, dest_file)?;
     }
 
-    Ok(())
+    Ok(to_folder.to_path_buf())
 }
 /// creates a new skill pack using the LLM to read data and interpret it
 pub fn new_skill_pack_llm_guided(
     skillpack_identifier: SkillpackIdentifier,
     problem_description: String,
     baseline_hint: Option<String>,
+    files_uploaded: &Vec<String>,
     config: NoemaConfig,
-) -> Result<(), anyhow::Error> {
+) -> Result<AuthorSession, anyhow::Error> {
     let name = skillpack_identifier.as_str();
-    let data_dir = pack_data_input_dir(&config, &name)?;
 
+    // construct a directory to copy the uploaded file to, bail if it already exists
+    let data_dir_upload = copy_uploaded_files_to_pack_input_dir(&files_uploaded, &skillpack_identifier, &config)?;
+
+    // construct a directory to copy the output files to, bail if it already exists
     let dir = pack_data_output_dir(&config, &name)?;
-    println!("creating dir: {}", &dir.display());
     create_dir_all(&dir)?;
 
     let session_path = dir.join("session.json");
@@ -178,7 +182,7 @@ pub fn new_skill_pack_llm_guided(
             "The scientist supplied only the path and the problem. Explore the data \
              and propose the complete reading yourself.".to_string(),
         ),
-        data: author::DataSpec { path: data_dir.display().to_string(), delimiter: ',' },
+        data: author::DataSpec { path: data_dir_upload.display().to_string(), delimiter: ',' },
         mapping: ColumnMap {
             subject: None,
             curve: vec![],
@@ -197,8 +201,8 @@ pub fn new_skill_pack_llm_guided(
         Some((&config.llm).into()),
 
     )?;
-
-    Ok(())
+    let author_session_res  = author::read_session(session_path.to_str().expect("unable to read session"))?;
+    Ok(author_session_res)
 }
 
 /// Draft the pack's baseline `mechanism.json`: one reasoning agent,

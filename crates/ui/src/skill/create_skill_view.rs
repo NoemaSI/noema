@@ -4,9 +4,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
-use jobctl::jobs::create_skillpack::{CreateSkillpack,CreateSkillpackOutput};
+use jobctl::jobs::create_skillpack::{CreateSkillpack,CreateSkillpackOutput, SkillPack};
 use jobctl::protocol::AgentEvent;
-use jobctl::{EngineHandle, EventStatus, JobDefinition, engine};
+use jobctl::{EngineHandle, EventStatus, JobDefinition, JobId, engine};
 
 use super::wizard::{self, step_for, WizardPhase, WizardStep};
 use crate::element::button::*;
@@ -26,11 +26,14 @@ pub struct CreateSkillView {
     pub(crate) name_input: Entity<InputState>,
     pub(crate) goal_input: Entity<TextareaState>,
     pub(crate) acceptance: Vec<String>,
+    pub(crate) skill_pack: Option<SkillPack>,
     pub(crate) error: Vec<String>,
     pub(crate) agent_log: Vec<String>,
     pub(crate) drafts: Vec<SkillDraft>,
     pub(crate) jobctl: EngineHandle,
-    pub(crate) filedrop: Entity<FileDropView>
+    pub(crate) filedrop: Entity<FileDropView>,
+    /// Root job id of the in-flight intent analysis, if any.
+    pub(crate) pending_analysis_root: Option<JobId>,
 }
 
 impl CreateSkillView {
@@ -48,6 +51,9 @@ impl CreateSkillView {
                     println!("ev: {:#?}", &ev);
                     match (ev.status, ev.kind.as_str()) {
                         (EventStatus::Progress, CreateSkillpack::KIND) => {
+                            // NOTE: we removed the agent in  jobctl.create_skillpack
+                            // these events will never fire
+                            
                             // Agent events only; provisioning progress
                             // (VM plumbing) is intentionally not surfaced.
                             if let Ok(agent_event) =
@@ -68,11 +74,25 @@ impl CreateSkillView {
                             }
                         }
                         (EventStatus::Done, CreateSkillpack::KIND) => {
-                            if let Ok(out) = serde_json::from_value::<CreateSkillpackOutput>(ev.payload) {
-                                view.acceptance = out.criteria;
-                                if let Some(summary) = out.summary {
-                                    view.push_log(format!("agent: {summary}"));
+                            match serde_json::from_value::<CreateSkillpackOutput>(ev.payload) {
+                                Ok(out) => {
+                                    view.acceptance = out.criteria;
+                                    if let Some(summary) = out.summary {
+                                        view.push_log(format!("agent: {summary}"));
+                                    }
+                                    view.push_log(format!(
+                                        "\u{2713} analysis complete \u{2014} skillpack \u{201c}{}\u{201d} received. Review & confirm.",
+                                        out.safe_name
+                                    ));
+                                    view.skill_pack = Some(out.skill_pack);
                                 }
+                                Err(e) => {
+                                    view.push_log(format!("\u{2715} could not parse analysis output: {e}"));
+                                }
+                            }
+                            if view.pending_analysis_root == Some(ev.root) {
+                                view.pending_analysis_root = None;
+                                view.phase = WizardPhase::IntentAnalysisDone;
                             }
                         }
                         (EventStatus::Failed, kind) => {
@@ -84,6 +104,9 @@ impl CreateSkillView {
                                 .to_string();
                             view.error.push(format!("{kind}: {msg}"));
                             view.push_log(format!("\u{2715} {kind}: {msg}"));
+                            if view.pending_analysis_root == Some(ev.root) {
+                                view.pending_analysis_root = None;
+                            }
                         }
                         _ => {}
                     }
@@ -107,6 +130,8 @@ impl CreateSkillView {
             agent_log: Vec::new(),
             drafts: Vec::new(),
             jobctl,
+            pending_analysis_root: None,
+            skill_pack: None,
         }
     }
 

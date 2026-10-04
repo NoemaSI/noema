@@ -29,7 +29,8 @@ pub enum WizardPhase {
     /// "New Skill" clicked: goal + acceptance criteria form is open.
     DefineSkill,
     /// "Analyze intent" clicked: agent reads name & goal.
-    IntentAnalysis,
+    IntentAnalysisWaiting,
+    IntentAnalysisDone,
 }
 
 #[allow(dead_code)]
@@ -76,7 +77,8 @@ pub fn step_for(phase: WizardPhase) -> &'static dyn WizardStep {
     match phase {
         WizardPhase::Initial => &InitialStep,
         WizardPhase::DefineSkill => &DefineSkillStep,
-        WizardPhase::IntentAnalysis => &IntentAnalysisStep,
+        WizardPhase::IntentAnalysisWaiting => &IntentAnalysisStep,
+        WizardPhase::IntentAnalysisDone => &IntentAnalysisStep,
     }
 }
 

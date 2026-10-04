@@ -106,10 +106,13 @@ impl WizardStep for DefineSkillStep {
                         };
 
                         match this.jobctl.create_skillpack(payload) {
-                            Ok(id) => this.push_log(format!("→ analyze submitted (root {id})")),
+                            Ok(id) => {
+                                this.push_log(format!("→ analysis submitted (root {id}). Please wait for the agent to finish it's analysis"));
+                                this.pending_analysis_root = Some(id);
+                                this.phase = WizardPhase::IntentAnalysisWaiting;
+                            }
                             Err(err) => this.push_log(format!("\u{2715} submit failed: {err}")),
                         }
-                        this.phase = WizardPhase::IntentAnalysis;
                         cx.notify();
                     });
                 },

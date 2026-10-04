@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use agentctl::{AgentClient, AgentEvent, AgentRequest};
 use noema_config::NoemaConfig;
+use pack::anyhow::bail;
+use pack::author::AuthorSession;
 use serde::{Deserialize, Serialize};
 
 use crate::jobs::ensure_vm::{provision, EnsureVmEvent};
@@ -15,6 +17,128 @@ use pack;
 /// VM, run the goal on the in-guest agent, and stream everything back as a
 /// single event stream.
 pub struct CreateSkillpack;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SkillPackDrive {
+    pub column: String,
+    pub name: String,
+    pub units: String,
+    pub description: String,
+    pub recorded: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SkillPackOutput {
+    pub column: String,
+    pub name: String,
+    pub units: String,
+    pub description: String,
+    pub recorded: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SkillPackMapping {
+    pub subject: String,
+    pub curve: Vec<String>,
+    pub time: String,
+    pub drives: Vec<SkillPackDrive>,
+    pub outputs: Vec<SkillPackOutput>
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SkillPackSplit {
+    pub train: Vec<String>,
+    pub validation: Vec<String>,
+    pub hidden: Vec<String>
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SkillPack {
+    pub data_path: PathBuf,
+    pub data_delimiter: String,
+    pub name: String,
+    pub mapping: SkillPackMapping,
+    pub condition_column: String,
+    pub split: SkillPackSplit,
+}
+
+fn channel_to_drive(channel: pack::author::ChannelColumn) -> Option<SkillPackDrive> {
+    Some(SkillPackDrive {
+        column: channel.column?,
+        name: channel.name,
+        units: channel.units,
+        description: channel.description,
+        recorded: channel.recorded,
+    })
+}
+
+fn channel_to_output(channel: pack::author::ChannelColumn) -> Option<SkillPackOutput> {
+    Some(SkillPackOutput {
+        column: channel.column?,
+        name: channel.name,
+        units: channel.units,
+        description: channel.description,
+        recorded: channel.recorded,
+    })
+}
+
+/// converts a AuthorSession (owned by JobCtl) to a SkillPack (owned by UI)
+impl TryFrom<AuthorSession> for SkillPack {
+    type Error = String;
+
+    fn try_from(session: AuthorSession) -> Result<Self, Self::Error> {
+        let gaps = pack::author::mapping_gaps(&session);
+        if !gaps.is_empty() {
+            return Err(format!(
+                "session mapping is incomplete, missing: {}",
+                gaps.join(", ")
+            ));
+        }
+
+        let subject = session.mapping.subject.ok_or("missing subject column")?;
+        let time = session.mapping.time.ok_or("missing time column")?;
+        let condition_column = session
+            .mapping
+            .condition_column
+            .or_else(|| session.mapping.drives.first().and_then(|d| d.column.clone()))
+            .ok_or("missing condition column and no drive channel to derive it from")?;
+
+        let drives = session
+            .mapping
+            .drives
+            .into_iter()
+            .map(channel_to_drive)
+            .collect::<Option<Vec<_>>>()
+            .ok_or("missing column for a drive channel")?;
+
+        let outputs = session
+            .mapping
+            .outputs
+            .into_iter()
+            .map(channel_to_output)
+            .collect::<Option<Vec<_>>>()
+            .ok_or("missing column for an output channel")?;
+
+        Ok(SkillPack {
+            data_path: PathBuf::from(session.data.path),
+            data_delimiter: session.data.delimiter.to_string(),
+            name: session.name,
+            mapping: SkillPackMapping {
+                subject,
+                curve: session.mapping.curve,
+                time,
+                drives,
+                outputs,
+            },
+            condition_column,
+            split: SkillPackSplit {
+                train: session.split.train,
+                validation: session.split.validation,
+                hidden: session.split.hidden,
+            },
+        })
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSkillpackPayload {
@@ -40,6 +164,7 @@ pub struct CreateSkillpackOutput {
     #[serde(default)]
     pub summary: Option<String>,
     pub safe_name: String,
+    pub skill_pack: SkillPack,
 }
 
 impl JobDefinition for CreateSkillpack {
@@ -65,25 +190,37 @@ impl JobDefinition for CreateSkillpack {
 
             match pack::SkillpackIdentifier::new(&*safe_name) {
                 Ok(skill_identifier) => {
-                    let _ = pack::copy_uploaded_files_to_pack_input_dir(&payload.files_dropped, &skill_identifier, &payload.config);
                     // Blocking call (creates its own tokio runtime internally);
                     // must not run on a jobctl worker thread.
-                    let skill_pack = tokio::task::spawn_blocking(move || {
-                        pack::new_skill_pack_llm_guided(skill_identifier, payload.problem_description, payload.baseline_hint, payload.config)
+                    let session = tokio::task::spawn_blocking(move || {
+                        pack::new_skill_pack_llm_guided(
+                            skill_identifier, 
+                            payload.problem_description,
+                            payload.baseline_hint,
+                            &payload.files_dropped,
+                            payload.config
+                        )
                     })
                     .await
                     .map_err(|e| EngineError::JobFailed(format!("skillpack task panicked: {e}")))?
                     .map_err(|e| EngineError::JobFailed(format!("{e:#}")))?;
+
+                    let skill_pack = SkillPack::try_from(session)
+                        .map_err(|e| EngineError::JobFailed(format!("{e}")))?;
+
+                    return Ok(CreateSkillpackOutput{
+                        criteria: vec![],
+                        summary: None,
+                        safe_name: safe_name.clone(),
+                        skill_pack
+                    })
+
                 }
                 Err(e) => {
                     return Err(EngineError::JobFailed(format!("unable to construct skillpack: {e}")))
                 }
             }
-            Ok(CreateSkillpackOutput {
-                criteria: vec![],
-                summary: None,
-                safe_name: safe_name.clone(),
-            })
+            unreachable!("both match arms return")
         }
     }
 }

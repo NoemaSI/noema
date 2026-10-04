@@ -4,7 +4,7 @@ use gpui_kit::*;
 
 use jobctl::jobs::create_skillpack::CreateSkillpackPayload;
 
-use super::create_skill_view::CreateSkillView;
+use super::create_skill_view::{CreateSkillView, QueueEntry, QueueStatus};
 use super::wizard::{define_form_fields, RoleState, WizardPhase, WizardStep};
 use crate::element::button::*;
 use crate::skill::wizard::INITIAL_ROLE_DRAFT;
@@ -108,6 +108,11 @@ impl WizardStep for DefineSkillStep {
                         match this.jobctl.create_skillpack(payload) {
                             Ok(id) => {
                                 this.push_log(format!("→ analysis submitted (root {id}). Please wait for the agent to finish it's analysis"));
+                                this.queue.push(QueueEntry {
+                                    root: id,
+                                    label: format!("Agent analysis \u{2014} {}", if name.is_empty() { "unnamed" } else { &name }),
+                                    status: QueueStatus::Running,
+                                });
                                 this.pending_analysis_root = Some(id);
                                 this.phase = WizardPhase::IntentAnalysisWaiting;
                             }

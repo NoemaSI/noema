@@ -1,3 +1,4 @@
+use gpui_kit::base::Disableable;
 use gpui_kit::component::button::*;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
@@ -34,6 +35,7 @@ pub fn pbutton_auto(
         .border_color(theme.ring)
         .on_click(on_click)
 }
+
 
 /// Secondary button: panel2 fill, grey outline, dark text.
 pub fn sbutton(

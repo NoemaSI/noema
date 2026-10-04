@@ -1,7 +1,12 @@
-use gpui_kit::base::{h_flex, v_flex, StyledExt};
+use std::time::Duration;
+
+use gpui_kit::base::{
+    animate_keyframes, h_flex, v_flex, Easing, IterationCount, Keyframe, Keyframes, StyledExt,
+    Timing,
+};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::{ActiveTheme, Theme};
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::*;
 use jobctl::jobs::create_skillpack::{CreateSkillpack,CreateSkillpackOutput, SkillPack};
@@ -19,6 +24,20 @@ pub struct SkillDraft {
     pub status: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum QueueStatus {
+    Running,
+    Done,
+    Failed,
+}
+
+/// One tracked job in the training queue panel.
+pub(crate) struct QueueEntry {
+    pub(crate) root: JobId,
+    pub(crate) label: String,
+    pub(crate) status: QueueStatus,
+}
+
 pub struct CreateSkillView {
     active_tab: usize,
     //  pub(crate)  means public within the current crate, but not from other crate
@@ -34,6 +53,8 @@ pub struct CreateSkillView {
     pub(crate) filedrop: Entity<FileDropView>,
     /// Root job id of the in-flight intent analysis, if any.
     pub(crate) pending_analysis_root: Option<JobId>,
+    /// Jobs tracked in the training queue panel (running & finished).
+    pub(crate) queue: Vec<QueueEntry>,
 }
 
 impl CreateSkillView {
@@ -90,6 +111,9 @@ impl CreateSkillView {
                                     view.push_log(format!("\u{2715} could not parse analysis output: {e}"));
                                 }
                             }
+                            if let Some(entry) = view.queue.iter_mut().find(|e| e.root == ev.root) {
+                                entry.status = QueueStatus::Done;
+                            }
                             if view.pending_analysis_root == Some(ev.root) {
                                 view.pending_analysis_root = None;
                                 view.phase = WizardPhase::IntentAnalysisDone;
@@ -104,6 +128,9 @@ impl CreateSkillView {
                                 .to_string();
                             view.error.push(format!("{kind}: {msg}"));
                             view.push_log(format!("\u{2715} {kind}: {msg}"));
+                            if let Some(entry) = view.queue.iter_mut().find(|e| e.root == ev.root) {
+                                entry.status = QueueStatus::Failed;
+                            }
                             if view.pending_analysis_root == Some(ev.root) {
                                 view.pending_analysis_root = None;
                             }
@@ -131,6 +158,7 @@ impl CreateSkillView {
             drafts: Vec::new(),
             jobctl,
             pending_analysis_root: None,
+            queue: Vec::new(),
             skill_pack: None,
         }
     }
@@ -162,9 +190,9 @@ impl CreateSkillView {
         }
     }
 
-    fn render_tab_content(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tab_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_tab {
-            0 => self.render_my_skills(cx).into_any_element(),
+            0 => self.render_my_skills(window, cx).into_any_element(),
             1 => self.render_skill_drafts(cx).into_any_element(),
             _ => div().child("Unknown content").into_any_element(),
         }
@@ -234,7 +262,7 @@ impl CreateSkillView {
             )
     }
 
-    fn render_my_skills(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_my_skills(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         h_flex()
             .size_full()
@@ -243,7 +271,7 @@ impl CreateSkillView {
             .p_4()
             .bg(theme.background)
             .child(self.render_skill_panel(cx))
-            .child(self.render_queue_panel(cx))
+            .child(self.render_queue_panel(window, cx))
     }
 
     fn render_skill_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -291,8 +319,83 @@ impl CreateSkillView {
     }
 
 
-    fn render_queue_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Three chevrons with a light wave sweeping left to right while a job runs.
+    /// Under reduced motion the keyframe sampler snaps to its end value and a
+    /// static row still reads as running via the "running…" status label.
+    fn running_indicator(root: JobId, theme: &Theme, window: &mut Window, cx: &mut App) -> Div {
+        h_flex().gap_x(px(1.)).items_center().children((0..3).map(|ix| {
+            let frames = Keyframes::try_new([
+                Keyframe::new(0., 0.),
+                Keyframe::new(0.35, 1.).ease(Easing::EaseOut),
+                Keyframe::new(0.7, 0.),
+                Keyframe::new(1., 0.),
+            ])
+            .expect("static keyframes are valid");
+            let value = animate_keyframes(
+                ("queue-running", format!("{root}-{ix}")),
+                &frames,
+                Timing::new(Duration::from_millis(1200))
+                    .delay(Duration::from_millis(ix as u64 * 180).into())
+                    .iterations(IterationCount::Infinite),
+                window,
+                cx,
+            )
+            .value;
+            div()
+                .text_color(theme.blue)
+                .opacity(0.15 + 0.85 * value)
+                .child("\u{25b8}")
+        }))
+    }
+
+    fn render_queue_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        let count = self.queue.len();
+        let entries = &self.queue;
+        let list = v_flex()
+            .id("queue-list")
+            .flex_1()
+            .gap_y_2()
+            .p_3()
+            .overflow_y_scroll()
+            .text_size(TEXT_SM)
+            .when(entries.is_empty(), |list| {
+                list.items_center().justify_center().text_color(theme.muted_foreground).child(
+                    v_flex()
+                        .items_center()
+                        .gap_1()
+                        .child("Steps appear here")
+                        .child("once you track a plan"),
+                )
+            })
+            .children(entries.iter().map(|entry| {
+                let (mark, status) = match entry.status {
+                    QueueStatus::Running => (
+                        Self::running_indicator(entry.root, &theme, window, cx).into_any_element(),
+                        "running\u{2026}",
+                    ),
+                    QueueStatus::Done => (
+                        div().text_color(theme.green).child("\u{2713}").into_any_element(),
+                        "done",
+                    ),
+                    QueueStatus::Failed => (
+                        div().text_color(theme.red).child("\u{2715}").into_any_element(),
+                        "failed",
+                    ),
+                };
+                h_flex()
+                    .gap_x_2()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        h_flex()
+                            .gap_x_2()
+                            .items_center()
+                            .child(mark)
+                            .child(div().text_color(theme.foreground).child(entry.label.clone())),
+                    )
+                    .child(div().text_color(theme.muted_foreground).child(status))
+            }));
         v_flex()
             .w(px(300.))
             .flex_none()
@@ -316,22 +419,10 @@ impl CreateSkillView {
                     .child(
                         div()
                             .text_color(theme.muted_foreground)
-                            .child("0/150"),
+                            .child(format!("{count}/150")),
                     ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_1()
-                    .text_size(TEXT_SM)
-                    .text_color(theme.muted_foreground)
-                    .child("Steps appear here")
-                    .child("once you track a plan"),
-            )
+            .child(list)
             .child(
                 v_flex()
                     .gap_y_2()
@@ -367,7 +458,7 @@ impl CreateSkillView {
 }
 
 impl Render for CreateSkillView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         v_flex()
             .size_full()
@@ -388,7 +479,7 @@ impl Render for CreateSkillView {
                     .flex_1()
                     .overflow_hidden()
                     .v_flex()
-                    .child(self.render_tab_content(cx)),
+                    .child(self.render_tab_content(window, cx)),
             )
     }
 }

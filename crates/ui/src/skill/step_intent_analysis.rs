@@ -1,4 +1,4 @@
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{Disableable, h_flex, v_flex};
 use gpui_kit::component::Theme;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -21,11 +21,11 @@ impl WizardStep for IntentAnalysisStep {
 
     fn nodes(&self) -> Vec<RoleState> {
         vec![
-            RoleState::Defined("QC"),
-            RoleState::Defined("FIT"),
-            RoleState::Defined("KIN"),
-            RoleState::Defined("VAL"),
-            RoleState::Defined("RPT"),
+            RoleState::Draft("intake"),
+            RoleState::Draft("…"),
+            RoleState::Draft("…"),
+            RoleState::Draft("validate"),
+            RoleState::Draft("deliver"),
         ]
     }
 
@@ -46,14 +46,34 @@ impl WizardStep for IntentAnalysisStep {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("DEFINE SKILL"),
             )
-            .child(
-                div()
-                    .text_color(theme.muted_foreground)
-                    .child(format!(
-                        "template matched \u{b7} {} criteria proposed",
-                        view.acceptance.len()
-                    )),
-            )
+            .when(view.skill_pack.is_none(), |div| {
+                div
+                .text_color(theme.muted_foreground)
+                .child(format!(
+                    "nothing yet - complete the analysis",
+                ))
+
+            })
+            .when(view.skill_pack.is_some(), |div| {
+                let maybe_skillpack = view.skill_pack.clone().unwrap_or_default();
+                let multi_drive = maybe_skillpack.mapping.drives.len() >= 2;
+                let multi_out   = maybe_skillpack.mapping.outputs.len() >= 2;
+                let drive_label = if multi_drive {"drives" }   else  {"drive"};
+                let out_label   = if multi_out   {"outputs" }  else  {"output"};
+
+                div
+                .text_color(theme.muted_foreground)
+                .child(
+                        format!(
+                            "template matched \u{b7} {} {}  -> {} {} proposed",
+                            maybe_skillpack.mapping.drives.len(),
+                            drive_label,
+                            maybe_skillpack.mapping.outputs.len(),
+                            out_label,
+                        )
+                    )
+
+            })
             .child(
                 div()
                     .text_color(theme.red)
@@ -71,7 +91,6 @@ impl WizardStep for IntentAnalysisStep {
         v_flex()
             .gap_y_3()
             .child(define_form_fields(view, theme, true))
-            .child(Self::analysis_box(view, theme))
             .child(
                 v_flex()
                     .id("agent-log")
@@ -104,10 +123,12 @@ impl WizardStep for IntentAnalysisStep {
                             .child(line.clone())
                     })),
             )
+            .child(Self::analysis_box(view, theme))
             .into_any_element()
     }
 
     fn actions(&self, view: &CreateSkillView, cx: &mut Context<CreateSkillView>) -> AnyElement {
+        let has_skill = view.skill_pack.is_some();
         h_flex()
             .gap_x_2()
             .child(sbutton_auto(
@@ -117,12 +138,15 @@ impl WizardStep for IntentAnalysisStep {
                 cx,
             ))
             .child(sbutton_auto("save-draft", "Save draft", |_, _, _| {}, cx))
-            .child(pbutton_auto(
-                "confirm-attach",
-                "Confirm & attach data",
-                |_, _, _| {},
-                cx,
-            ))
+            .child(
+                pbutton_auto(
+                    "confirm-attach",
+                    "Confirm & attach data",
+                    |_, _, _| {},
+                    cx,
+                )
+                    .disabled(!has_skill)
+            )
             .into_any_element()
     }
 }

@@ -33,7 +33,7 @@ impl Render for FileDropView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dropped = self.dropped_paths.clone();
         let content = if dropped.is_empty() {
-            div().child("Drop files here")
+            div().child("Drop tabular CSV files here")
         } else {
             div().child(format!("{} files dropped", dropped.len())).children(
                 dropped

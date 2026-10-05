@@ -93,18 +93,6 @@ impl MermaidScene {
             },
         };
         window.with_content_mask(Some(ContentMask { bounds: canvas }), |window| {
-            if std::env::var_os("MERMAID_DUMMY").is_some() {
-                // Dummy 2x2 path in the window corner to perturb path-batch
-                // ordering in the renderer for debugging.
-                let mut b = PathBuilder::fill();
-                b.move_to(point(px(1.), px(1.)));
-                b.line_to(point(px(3.), px(1.)));
-                b.line_to(point(px(3.), px(3.)));
-                b.close();
-                if let Ok(p) = b.build() {
-                    window.paint_path(p, Rgba { r: 0.0, g: 0.0, b: 1.0, a: 1.0 });
-                }
-            }
             self.paint_commands(&self.scene.commands, canvas.origin, scale, 1.0, window);
         });
     }
@@ -117,10 +105,6 @@ impl MermaidScene {
         opacity: f32,
         window: &mut Window,
     ) {
-        let max_fills: Option<usize> = std::env::var("MERMAID_MAX_FILLS")
-            .ok()
-            .and_then(|v| v.parse().ok());
-        let mut fills_painted = 0usize;
         let mut i = 0;
         while i < commands.len() {
             match &commands[i] {
@@ -129,10 +113,7 @@ impl MermaidScene {
                     paint,
                     fill_rule,
                 } => {
-                    if max_fills.is_none_or(|n| fills_painted < n) {
-                        fills_painted += 1;
-                        paint_path(path, paint, *fill_rule, origin, scale, opacity, window);
-                    }
+                    paint_path(path, paint, *fill_rule, origin, scale, opacity, window);
                     i += 1;
                 }
                 SceneCommand::PushClip { path, fill_rule } => {
@@ -257,15 +238,11 @@ fn paint_path(
         }
     }
     let Ok(path) = builder.build() else {
-        eprintln!("DBG path build failed for {} commands", path.len());
+        // Rare lyon failure (e.g. TooManyVertices on a pathological path).
+        // Skip this primitive rather than aborting the whole diagram.
         return;
     };
-    let background = if std::env::var_os("MERMAID_DEBUG_RED").is_some() {
-        Rgba { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }.into()
-    } else {
-        to_background(paint, scale, opacity)
-    };
-    window.paint_path(path, background);
+    window.paint_path(path, to_background(paint, scale, opacity));
 }
 
 fn lyon_fill_options(even_odd: bool) -> gpui_kit::gpui::FillOptions {
@@ -467,7 +444,6 @@ pub fn mermaid(scene: MermaidScene) -> MermaidDiagram {
     MermaidDiagram::new(scene)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,213 +483,6 @@ mod tests {
         assert!(fills > 0);
     }
 }
-
-#[cfg(test)]
-mod tessellation_tests {
-    use super::*;
-
-    #[test]
-    fn all_scene_paths_tessellate() {
-        let scene = MermaidScene::build(
-            "flowchart TD; A[Start] --> B[Done]",
-            RenderOptions::default(),
-        )
-        .unwrap();
-        let mut empty = 0;
-        let mut ok = 0;
-        let mut failed = 0;
-        for c in &scene.scene.commands {
-            if let SceneCommand::FillPath { path, fill_rule, .. } = c {
-                let mut builder = PathBuilder::fill();
-                builder.style =
-                    PathStyle::Fill(lyon_fill_options(matches!(fill_rule, FillRule::EvenOdd)));
-                for cmd in path {
-                    match *cmd {
-                        PathCommand::MoveTo { x, y } => builder.move_to(to_point((x, y), point(px(0.), px(0.)), 1.0)),
-                        PathCommand::LineTo { x, y } => builder.line_to(to_point((x, y), point(px(0.), px(0.)), 1.0)),
-                        PathCommand::QuadTo { x1, y1, x, y } => builder.curve_to(to_point((x, y), point(px(0.), px(0.)), 1.0), to_point((x1, y1), point(px(0.), px(0.)), 1.0)),
-                        PathCommand::CubicTo { x1, y1, x2, y2, x, y } => builder.cubic_bezier_to(to_point((x, y), point(px(0.), px(0.)), 1.0), to_point((x1, y1), point(px(0.), px(0.)), 1.0), to_point((x2, y2), point(px(0.), px(0.)), 1.0)),
-                        PathCommand::Close => builder.close(),
-                    }
-                }
-                match builder.build() {
-                    Ok(p) if p.vertices.is_empty() => empty += 1,
-                    Ok(_) => ok += 1,
-                    Err(e) => {
-                        failed += 1;
-                        println!("build err: {e:?}");
-                    }
-                }
-            }
-        }
-        println!("ok {ok}, empty {empty}, failed {failed}");
-        assert_eq!((empty, failed), (0, 0));
-    }
-}
-
-#[cfg(test)]
-mod color_tests {
-    use super::*;
-
-    #[test]
-    fn print_fill_colors() {
-        let scene = MermaidScene::build(
-            "flowchart TD; A[Start] --> B[Done]",
-            RenderOptions::default(),
-        )
-        .unwrap();
-        let mut colors = std::collections::HashMap::new();
-        for c in &scene.scene.commands {
-            if let SceneCommand::FillPath { paint, path, .. } = c {
-                let key = match paint {
-                    Paint::Solid(col) => format!("{:?}", (col.r, col.g, col.b, col.a)),
-                    Paint::LinearGradient { .. } => "gradient".to_string(),
-                };
-                *colors.entry(key).or_insert(0) += path.len();
-            }
-        }
-        for (k, v) in colors {
-            println!("{k}: {v} cmds");
-        }
-    }
-}
-
-#[cfg(test)]
-mod dump_tests {
-    use super::*;
-
-    #[test]
-    fn dump_command_structure() {
-        let scene = MermaidScene::build(
-            "sequenceDiagram\n    participant U as User\n    participant V as View\n    U->>V: show diagram\n    V-->>U: native vectors",
-            RenderOptions::default(),
-        )
-        .unwrap();
-        let mut depth = 0;
-        for c in &scene.scene.commands {
-            match c {
-                SceneCommand::PushLayer { opacity, blend_mode } => {
-                    println!("{}PushLayer {opacity} {blend_mode:?}", "  ".repeat(depth));
-                    depth += 1;
-                }
-                SceneCommand::PopLayer => depth -= 1,
-                SceneCommand::PushClip { .. } => {
-                    println!("{}PushClip", "  ".repeat(depth));
-                    depth += 1;
-                }
-                SceneCommand::PopClip => depth -= 1,
-                SceneCommand::FillPath { path, paint, .. } => {
-                    let kind = match paint {
-                        Paint::Solid(_) => "solid",
-                        Paint::LinearGradient { .. } => "grad",
-                    };
-                    println!("{}Fill {kind} {}cmds", "  ".repeat(depth), path.len());
-                }
-            }
-        }
-        println!("final depth {depth}");
-    }
-}
-
-#[cfg(test)]
-mod bounds_tests {
-    use super::*;
-
-    fn build_one(path: &[PathCommand], even_odd: bool) -> gpui_kit::gpui::Path<Pixels> {
-        let mut builder = PathBuilder::fill();
-        builder.style = PathStyle::Fill(lyon_fill_options(even_odd));
-        for cmd in path {
-            match *cmd {
-                PathCommand::MoveTo { x, y } => builder.move_to(to_point((x, y), point(px(0.), px(0.)), 1.0)),
-                PathCommand::LineTo { x, y } => builder.line_to(to_point((x, y), point(px(0.), px(0.)), 1.0)),
-                PathCommand::QuadTo { x1, y1, x, y } => builder.curve_to(to_point((x, y), point(px(0.), px(0.)), 1.0), to_point((x1, y1), point(px(0.), px(0.)), 1.0)),
-                PathCommand::CubicTo { x1, y1, x2, y2, x, y } => builder.cubic_bezier_to(to_point((x, y), point(px(0.), px(0.)), 1.0), to_point((x1, y1), point(px(0.), px(0.)), 1.0), to_point((x2, y2), point(px(0.), px(0.)), 1.0)),
-                PathCommand::Close => builder.close(),
-            }
-        }
-        builder.build().expect("build")
-    }
-
-    fn expected_bbox(path: &[PathCommand]) -> (f32, f32, f32, f32) {
-        let mut min_x = f32::MAX;
-        let mut min_y = f32::MAX;
-        let mut max_x = f32::MIN;
-        let mut max_y = f32::MIN;
-        let mut e = |x: f32, y: f32| {
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
-        };
-        for c in path {
-            match *c {
-                PathCommand::MoveTo { x, y } | PathCommand::LineTo { x, y } => e(x, y),
-                PathCommand::QuadTo { x1, y1, x, y } => { e(x1, y1); e(x, y); }
-                PathCommand::CubicTo { x1, y1, x2, y2, x, y } => { e(x1, y1); e(x2, y2); e(x, y); }
-                PathCommand::Close => {}
-            }
-        }
-        (min_x, min_y, max_x, max_y)
-    }
-
-    #[test]
-    fn path_bounds_match_geometry() {
-        for src in [
-            "flowchart TD; A[Start] --> B[Done]",
-            "sequenceDiagram\n    participant U as User\n    U->>U: hi",
-        ] {
-            let scene = MermaidScene::build(src, RenderOptions::default()).unwrap();
-            for (i, c) in scene.scene.commands.iter().enumerate() {
-                if let SceneCommand::FillPath { path, fill_rule, .. } = c {
-                    let built = build_one(path, matches!(fill_rule, FillRule::EvenOdd));
-                    let (ex0, ey0, ex1, ey1) = expected_bbox(path);
-                    let b = built.bounds;
-                    let bx0: f32 = b.origin.x.into();
-                    let by0: f32 = b.origin.y.into();
-                    let bx1 = bx0 + f32::from(b.size.width);
-                    let by1 = by0 + f32::from(b.size.height);
-                    let tol = 2.0;
-                    if !(bx0 <= ex0 + tol
-                        && by0 <= ey0 + tol
-                        && bx1 >= ex1 - tol
-                        && by1 >= ey1 - tol
-                        && bx0 > ex0 - 500.
-                        && by0 > ey0 - 500.
-                        && bx1 < ex1 + 500.
-                        && by1 < ey1 + 500.)
-                    {
-                        println!(
-                            "BAD path {i}: built=({bx0},{by0})-({bx1},{by1}) expected=({ex0},{ey0})-({ex1},{ey1})"
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod dump_path_tests {
-    use super::*;
-
-    #[test]
-    fn dump_path_1() {
-        let scene = MermaidScene::build(
-            "flowchart TD; A[Start] --> B[Done]",
-            RenderOptions::default(),
-        )
-        .unwrap();
-        for (i, c) in scene.scene.commands.iter().enumerate() {
-            if let SceneCommand::FillPath { path, paint, fill_rule } = c {
-                println!("--- {i} rule {fill_rule:?} paint {paint:?}");
-                for cmd in path {
-                    println!("  {cmd:?}");
-                }
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod matching_tests {
     use super::*;

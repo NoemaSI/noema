@@ -199,18 +199,17 @@ fn log_multiply_fallback() {
 /// Index of the closing command matching the opener at offset 0 of `slice`.
 /// Returns `slice.len() - 1` when unbalanced.
 fn matching_end(slice: &[SceneCommand], is_close: impl Fn(&SceneCommand) -> bool) -> usize {
-    let mut depth = 0usize;
+    let mut depth = 0i32;
     for (idx, command) in slice.iter().enumerate() {
-        if is_close(command) {
-            if depth == 0 {
-                return idx;
+        match command {
+            SceneCommand::PushClip { .. } | SceneCommand::PushLayer { .. } => depth += 1,
+            SceneCommand::PopClip | SceneCommand::PopLayer => {
+                depth -= 1;
+                if depth == 0 && is_close(command) {
+                    return idx;
+                }
             }
-            depth -= 1;
-        } else if matches!(
-            command,
-            SceneCommand::PushClip { .. } | SceneCommand::PushLayer { .. }
-        ) {
-            depth += 1;
+            SceneCommand::FillPath { .. } => {}
         }
     }
     slice.len() - 1
@@ -586,7 +585,7 @@ mod dump_tests {
     #[test]
     fn dump_command_structure() {
         let scene = MermaidScene::build(
-            "flowchart TD; A[Start] --> B[Done]",
+            "sequenceDiagram\n    participant U as User\n    participant V as View\n    U->>V: show diagram\n    V-->>U: native vectors",
             RenderOptions::default(),
         )
         .unwrap();
@@ -712,5 +711,53 @@ mod dump_path_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod matching_tests {
+    use super::*;
+
+    fn push_clip() -> SceneCommand {
+        SceneCommand::PushClip { path: Vec::new(), fill_rule: FillRule::NonZero }
+    }
+    fn push_layer() -> SceneCommand {
+        SceneCommand::PushLayer { opacity: 1.0, blend_mode: BlendMode::Normal }
+    }
+
+    #[test]
+    fn matching_end_finds_closest_opener() {
+        let cmds = vec![
+            push_clip(),
+            SceneCommand::FillPath {
+                path: Vec::new(),
+                paint: Paint::Solid(Color { r: 0, g: 0, b: 0, a: 1. }),
+                fill_rule: FillRule::NonZero,
+            },
+            SceneCommand::PopClip,
+            SceneCommand::FillPath {
+                path: Vec::new(),
+                paint: Paint::Solid(Color { r: 0, g: 0, b: 0, a: 1. }),
+                fill_rule: FillRule::NonZero,
+            },
+            SceneCommand::PopClip,
+        ];
+        // Opener at 0 must match the PopClip at index 2, not 4.
+        assert_eq!(
+            matching_end(&cmds, |c| matches!(c, SceneCommand::PopClip)),
+            2
+        );
+    }
+
+    #[test]
+    fn matching_end_handles_nested_mixed_types() {
+        let cmds = vec![
+            push_clip(),
+            push_layer(),
+            SceneCommand::PopLayer,
+            SceneCommand::PopClip,
+            SceneCommand::PopClip,
+        ];
+        assert_eq!(matching_end(&cmds, |c| matches!(c, SceneCommand::PopClip)), 3);
     }
 }

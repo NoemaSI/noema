@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::data::RawCurve;
 use crate::experiment::{Condition, InputDrive};
 use crate::pack::Subject;
+use crate::plot::DataCurve;
 
 /// Everything the interview learns: the whole authoring state up to
 /// the point code generation starts.
@@ -553,15 +554,11 @@ pub fn propose_split(conditions: &[Condition]) -> SplitDraft {
     }
 }
 
-// ---------------------------------------------------------------- preview
-
-/// Data-only figure: measured curves, one panel per subject, no
-/// model — the interview's "is this what you measured?" check.
-pub fn preview_png(
+pub fn preview_panels(
     session: &AuthorSession,
     subjects: &[Subject],
     panels: usize,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<(String, Vec<DataCurve>)>> {
     let output = session
         .mapping
         .outputs
@@ -593,10 +590,30 @@ pub fn preview_png(
         })
         .collect();
 
+    Ok(panels)
+
+}
+
+
+// ---------------------------------------------------------------- preview
+
+/// Data-only figure: measured curves, one panel per subject, no
+/// model — the interview's "is this what you measured?" check.
+pub fn preview_png(
+    session: &AuthorSession,
+    subjects: &[Subject],
+    panels: usize,
+) -> Result<Vec<u8>> {
+    let panels = preview_panels(session, subjects, panels)?;
+    let output = session
+        .mapping
+        .outputs
+        .first()
+        .context("no output channels")?;
     crate::plot::data_preview_png(
         &format!("{} — measured data", session.name),
         &format!("{} ({})", output.name, output.units),
-        &panels,
+        &*panels,
     )
 }
 

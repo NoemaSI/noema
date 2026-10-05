@@ -4,8 +4,9 @@ use std::path::PathBuf;
 
 use agentctl::{AgentClient, AgentEvent, AgentRequest};
 use noema_config::NoemaConfig;
-use pack::anyhow::bail;
-use pack::author::AuthorSession;
+use pack::anyhow::{self, bail};
+use pack::author::{AuthorSession, load_subjects, preview_panels};
+use pack::plot::DataCurve;
 use serde::{Deserialize, Serialize};
 
 use crate::jobs::ensure_vm::{provision, EnsureVmEvent};
@@ -158,13 +159,20 @@ pub enum CreateSkillpackEvent {
     Agent(AgentEvent),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SkillPanel {
+    pub name: String,
+    pub curves: Vec<DataCurve>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct CreateSkillpackOutput {
     pub criteria: Vec<String>,
     #[serde(default)]
     pub summary: Option<String>,
     pub safe_name: String,
     pub skill_pack: SkillPack,
+    pub skill_panels: Vec<SkillPanel>
 }
 
 impl JobDefinition for CreateSkillpack {
@@ -205,15 +213,33 @@ impl JobDefinition for CreateSkillpack {
                     .map_err(|e| EngineError::JobFailed(format!("skillpack task panicked: {e}")))?
                     .map_err(|e| EngineError::JobFailed(format!("{e:#}")))?;
 
+
+                    let subjects = load_subjects(&session)
+                                    .map_err(|err| EngineError::JobFailed(err.to_string()))?;
+
+
+                    // <Vec<(String, Vec<DataCurve>)>
+                    let mut skill_panels = vec![];
+                    let panels = preview_panels(&session, &subjects, 2)
+                        .map_err(|err| EngineError::JobFailed(err.to_string()))?;
+
+                    for panel in panels {
+                        let name = panel.0;
+                        let curves = panel.1;
+                        skill_panels.push(SkillPanel{name, curves});
+                    }
                     let skill_pack = SkillPack::try_from(session)
                         .map_err(|e| EngineError::JobFailed(format!("{e}")))?;
 
-                    return Ok(CreateSkillpackOutput{
-                        criteria: vec![],
-                        summary: None,
-                        safe_name: safe_name.clone(),
-                        skill_pack
-                    })
+                    return Ok(
+                        CreateSkillpackOutput{
+                            criteria: vec![],
+                            summary: None,
+                            safe_name: safe_name.clone(),
+                            skill_pack,
+                            skill_panels,
+                        }
+                    )
 
                 }
                 Err(e) => {

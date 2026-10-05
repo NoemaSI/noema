@@ -15,7 +15,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use base64::Engine as _;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::candidate::{CandidateModel, CandidateSpec};
 use crate::data::Curve;
@@ -579,6 +579,7 @@ pub fn diagnostic_plot_png(
 }
 
 /// One measured-only polyline for a data preview (no model).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DataCurve {
     pub x: Vec<f64>,
     pub y: Vec<f64>,

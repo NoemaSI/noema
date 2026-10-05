@@ -18,6 +18,7 @@ use jobctl::{EngineError, EngineHandle, JobCtx, JobDefinition, Results, Services
 pub struct StubCreateSkillpack;
 
 impl JobDefinition for StubCreateSkillpack {
+    // make this a stub for the CreateSkillpack job by assigning its KIND
     const KIND: &'static str = CreateSkillpack::KIND;
     const DESCRIPTION: &'static str = "test stub";
 

@@ -21,10 +21,15 @@
 //!   and re-anchored to the path bounds with the gradient axis angle
 //!   (GPUI gradients are angle-based two-stop).
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use gpui_kit::gpui::{
-    App, Background, Bounds, ContentMask, DefiniteLength, Element, ElementId, GlobalElementId,
-    InspectorElementId, IntoElement, LayoutId, Length, LinearColorStop, PathBuilder, PathStyle,
-    Pixels, Point, Rgba, Size, Style, Window, linear_gradient, point, px,
+    App, Background, Bounds, ContentMask, Context, CursorStyle, DefiniteLength, Element, ElementId,
+    GlobalElementId, InspectorElementId, InteractiveElement, IntoElement, LayoutId, Length,
+    LinearColorStop, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, PathBuilder,
+    PathStyle, PinchEvent, Pixels, Point, Render, Rgba, ScrollDelta, ScrollWheelEvent, Size, Style,
+    Styled, Window, div, linear_gradient, point, px,
 };
 use mermaid_rs_renderer::{RenderOptions, render_scene};
 
@@ -73,27 +78,53 @@ impl MermaidScene {
         (w / self.scene.width).min(h / self.scene.height)
     }
 
-    /// Replay the scene into the current GPUI paint context.
-    ///
-    /// The scene canvas is scaled uniformly to fit `bounds` and centered.
-    /// Respects the window's current content mask.
+    /// Screen origin of the scene's (0,0) and the effective scale for a given
+    /// viewport `bounds`, `zoom` (multiplier on the fit scale) and `pan`
+    /// (screen-pixel offset). Shared by [`MermaidScene::paint_view`] and the
+    /// zoom/pan handlers so their transforms stay in sync.
+    pub fn view_origin(&self, bounds: Bounds<Pixels>, zoom: f32, pan: Point<Pixels>) -> (Point<Pixels>, f32) {
+        let scale = self.fit_scale(bounds) * zoom;
+        let origin = point(
+            bounds.origin.x + (bounds.size.width - px(self.scene.width * scale)) / 2.0 + pan.x,
+            bounds.origin.y + (bounds.size.height - px(self.scene.height * scale)) / 2.0 + pan.y,
+        );
+        (origin, scale)
+    }
+
+    /// Replay the scene fit-centered into `bounds` (identity view transform).
     pub fn paint(&self, bounds: Bounds<Pixels>, window: &mut Window) {
-        let scale = self.fit_scale(bounds);
+        self.paint_view(bounds, window, 1.0, point(px(0.), px(0.)));
+    }
+
+    /// Replay the scene with an additional view transform.
+    ///
+    /// `zoom` multiplies the fit-to-bounds scale (1.0 = fit); `pan` offsets the
+    /// result in screen pixels. Content is clipped to `bounds` so panning and
+    /// zooming move the diagram within the element rather than outside it.
+    pub fn paint_view(
+        &self,
+        bounds: Bounds<Pixels>,
+        window: &mut Window,
+        zoom: f32,
+        pan: Point<Pixels>,
+    ) {
+        let (origin, scale) = self.view_origin(bounds, zoom, pan);
         if scale <= 0.0 {
             return;
         }
-        let canvas = Bounds {
-            origin: point(
-                bounds.origin.x + (bounds.size.width - px(self.scene.width * scale)) / 2.0,
-                bounds.origin.y + (bounds.size.height - px(self.scene.height * scale)) / 2.0,
-            ),
-            size: Size {
-                width: px(self.scene.width * scale),
-                height: px(self.scene.height * scale),
-            },
-        };
-        window.with_content_mask(Some(ContentMask { bounds: canvas }), |window| {
-            self.paint_commands(&self.scene.commands, canvas.origin, scale, 1.0, window);
+        {
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n < 40 {
+                eprintln!(
+                    "DBG paint #{n} bounds=({},{},{},{}) zoom={zoom:.3} pan=({},{}) origin=({},{}) scale={scale:.3}",
+                    p(bounds.origin.x), p(bounds.origin.y), p(bounds.size.width), p(bounds.size.height),
+                    p(pan.x), p(pan.y), p(origin.x), p(origin.y),
+                );
+            }
+        }
+        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+            self.paint_commands(&self.scene.commands, origin, scale, 1.0, window);
         });
     }
 
@@ -340,19 +371,43 @@ fn clip_bounds(
 }
 
 /// A GPUI element that renders a prebuilt [`MermaidScene`], fit-centered
-/// into its bounds.
+/// into its bounds, with an optional zoom/pan view transform.
 pub struct MermaidDiagram {
     scene: MermaidScene,
     id: Option<ElementId>,
+    zoom: f32,
+    pan: Point<Pixels>,
+    bounds_sink: Option<Rc<RefCell<Option<Bounds<Pixels>>>>>,
 }
 
 impl MermaidDiagram {
     pub fn new(scene: MermaidScene) -> Self {
-        Self { scene, id: None }
+        Self {
+            scene,
+            id: None,
+            zoom: 1.0,
+            pan: point(px(0.), px(0.)),
+            bounds_sink: None,
+        }
     }
 
     pub fn id(mut self, id: impl Into<ElementId>) -> Self {
         self.id = Some(id.into());
+        self
+    }
+
+    /// Apply a view transform (`zoom` multiplies the fit scale, `pan` is a
+    /// screen-pixel offset).
+    pub fn transform(mut self, zoom: f32, pan: Point<Pixels>) -> Self {
+        self.zoom = zoom;
+        self.pan = pan;
+        self
+    }
+
+    /// Report this element's painted bounds into `sink` each frame, so an
+    /// owning view can run zoom/pan math against the live bounds.
+    pub fn bounds_sink(mut self, sink: Rc<RefCell<Option<Bounds<Pixels>>>>) -> Self {
+        self.bounds_sink = Some(sink);
         self
     }
 }
@@ -419,7 +474,10 @@ impl Element for MermaidDiagram {
         window: &mut Window,
         _cx: &mut App,
     ) {
-        self.scene.paint(bounds, window);
+        if let Some(sink) = &self.bounds_sink {
+            *sink.borrow_mut() = Some(bounds);
+        }
+        self.scene.paint_view(bounds, window, self.zoom, self.pan);
     }
 }
 
@@ -442,6 +500,140 @@ pub fn mermaid_scene_or_empty(source: &str, options: RenderOptions) -> MermaidSc
 /// `mermaid(scene)` where `scene` was built once via [`MermaidScene::build`].
 pub fn mermaid(scene: MermaidScene) -> MermaidDiagram {
     MermaidDiagram::new(scene)
+}
+
+fn p(v: Pixels) -> f32 {
+    v.into()
+}
+
+/// Zoom range enforced by [`MermaidViewer`].
+pub const MIN_ZOOM: f32 = 0.2;
+/// See [`MIN_ZOOM`].
+pub const MAX_ZOOM: f32 = 8.0;
+
+/// A stateful, interactive Mermaid viewer: fit-centered by default, with
+/// trackpad scroll / pinch to zoom (about the cursor) and left-drag to pan.
+///
+/// Build once with [`MermaidViewer::new`] (the scene is pre-rendered, so this
+/// is cheap) and place the returned [`Entity`] in your view tree.
+pub struct MermaidViewer {
+    scene: MermaidScene,
+    zoom: f32,
+    pan: Point<Pixels>,
+    drag: Option<(Point<Pixels>, Point<Pixels>)>,
+    bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
+    id: ElementId,
+}
+
+impl MermaidViewer {
+    pub fn new(scene: MermaidScene) -> Self {
+        Self {
+            scene,
+            zoom: 1.0,
+            pan: point(px(0.), px(0.)),
+            drag: None,
+            bounds: Rc::new(RefCell::new(None)),
+            id: ElementId::Name("mermaid-viewer".into()),
+        }
+    }
+
+    /// Customize the element id (must be unique among siblings).
+    pub fn id(mut self, id: impl Into<ElementId>) -> Self {
+        self.id = id.into();
+        self
+    }
+
+    /// Reset to the fit-centered view.
+    pub fn reset(&mut self) {
+        self.zoom = 1.0;
+        self.pan = point(px(0.), px(0.));
+    }
+
+    /// Zoom by `factor` keeping the world point under `cursor` fixed.
+    pub fn zoom_at(&mut self, cursor: Point<Pixels>, factor: f32) {
+        let Some(bounds) = *self.bounds.borrow() else {
+            return;
+        };
+        let fit = self.scene.fit_scale(bounds);
+        if fit <= 0.0 {
+            return;
+        }
+        let (origin_old, s_old) = self.scene.view_origin(bounds, self.zoom, self.pan);
+        let new_zoom = (self.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
+        let s_new = fit * new_zoom;
+        if s_old <= 0.0 || s_new <= 0.0 {
+            return;
+        }
+        // World point (scene units) currently under the cursor.
+        let wx = (p(cursor.x) - p(origin_old.x)) / s_old;
+        let wy = (p(cursor.y) - p(origin_old.y)) / s_old;
+        // Desired origin so that world point lands back under the cursor:
+        // cursor = origin + w * scale  =>  origin = cursor - w * scale.
+        let want_x = p(cursor.x) - wx * s_new;
+        let want_y = p(cursor.y) - wy * s_new;
+        // Base (unpanned) origin at the new zoom.
+        let (base_new, _) = self.scene.view_origin(bounds, new_zoom, point(px(0.), px(0.)));
+        self.pan = point(px(want_x - p(base_new.x)), px(want_y - p(base_new.y)));
+        self.zoom = new_zoom;
+    }
+}
+
+impl Render for MermaidViewer {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let diagram = mermaid(self.scene.clone())
+            .transform(self.zoom, self.pan)
+            .bounds_sink(self.bounds.clone());
+        div()
+            .id(self.id.clone())
+            .size_full()
+            .overflow_hidden()
+            .cursor(if self.drag.is_some() {
+                CursorStyle::ClosedHand
+            } else {
+                CursorStyle::OpenHand
+            })
+            .child(diagram)
+            .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _window, cx| {
+                let dy = match ev.delta {
+                    ScrollDelta::Pixels(d) => p(d.y),
+                    ScrollDelta::Lines(d) => d.y,
+                };
+                if dy != 0.0 {
+                    this.zoom_at(ev.position, (-dy * 0.01).exp());
+                    cx.notify();
+                }
+            }))
+            .on_pinch(cx.listener(|this, ev: &PinchEvent, _window, cx| {
+                if ev.delta != 0.0 {
+                    this.zoom_at(ev.position, 1.0 + ev.delta);
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                gpui_kit::gpui::MouseButton::Left,
+                cx.listener(|this, ev: &MouseDownEvent, _window, cx| {
+                    this.drag = Some((ev.position, this.pan));
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _window, cx| {
+                if let Some((start, start_pan)) = this.drag {
+                    this.pan = point(
+                        px(p(start_pan.x) + p(ev.position.x) - p(start.x)),
+                        px(p(start_pan.y) + p(ev.position.y) - p(start.y)),
+                    );
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                gpui_kit::gpui::MouseButton::Left,
+                cx.listener(|this, _ev: &MouseUpEvent, _window, cx| {
+                    if this.drag.take().is_some() {
+                        cx.notify();
+                    }
+                }),
+            )
+    }
 }
 
 #[cfg(test)]

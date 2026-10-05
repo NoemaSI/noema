@@ -5,9 +5,10 @@
 use gpui_kit::component::Root;
 use gpui_kit::gpui::px;
 use gpui_kit::{
-    AppContext, Bounds, Context, IntoElement, ParentElement, Render, Styled, Window, div, rgb, size,
+    AppContext, Bounds, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div,
+    rgb, size,
 };
-use mermaid_gpui::{MermaidScene, mermaid};
+use mermaid_gpui::{MermaidScene, MermaidViewer};
 
 const DEMO_SOURCE: &str = r#"
 flowchart TD
@@ -30,20 +31,20 @@ sequenceDiagram
 "#;
 
 struct Demo {
-    primary: MermaidScene,
-    secondary: MermaidScene,
+    primary: Entity<MermaidViewer>,
+    secondary: Entity<MermaidViewer>,
 }
 
 impl Demo {
-    fn new() -> Self {
+    fn new(cx: &mut Context<Self>) -> Self {
         let options = mermaid_gpui::mermaid_rs_renderer::RenderOptions::default();
-        let primary =
-            MermaidScene::build(DEMO_SOURCE, options.clone()).expect("demo flowchart must render");
+        let primary = MermaidScene::build(DEMO_SOURCE, options.clone())
+            .expect("demo flowchart must render");
         let secondary = MermaidScene::build(SECOND_SOURCE, options)
             .expect("demo sequence diagram must render");
         Self {
-            primary,
-            secondary,
+            primary: cx.new(|_| MermaidViewer::new(primary).id("primary")),
+            secondary: cx.new(|_| MermaidViewer::new(secondary).id("secondary")),
         }
     }
 }
@@ -55,18 +56,8 @@ impl Render for Demo {
             .flex()
             .flex_col()
             .bg(rgb(0xffffff))
-            .child(
-                div()
-                    .w(px(600.))
-                    .h(px(400.))
-                    .child(mermaid(self.primary.clone())),
-            )
-            .child(
-                div()
-                    .w(px(600.))
-                    .h(px(400.))
-                    .child(mermaid(self.secondary.clone())),
-            )
+            .child(div().w(px(600.)).h(px(400.)).child(self.primary.clone()))
+            .child(div().w(px(600.)).h(px(400.)).child(self.secondary.clone()))
     }
 }
 
@@ -85,7 +76,7 @@ fn main() {
                     ..Default::default()
                 },
                 |window, cx| {
-                    let view = cx.new(|_cx| Demo::new());
+                    let view = cx.new(|cx| Demo::new(cx));
                     cx.new(|cx| Root::new(view, window, cx))
                 },
             )

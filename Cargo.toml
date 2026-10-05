@@ -15,3 +15,10 @@ tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "sy
 noema-config = { path = "crates/noema-config" }
 jobctl = { path = "crates/jobctl"}
 
+# Faster optimized iteration profile: thin LTO and parallel codegen compile
+# much faster than the fat-LTO release profile.
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+

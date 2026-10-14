@@ -14,7 +14,9 @@ sha2 = "0.10.9"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "sync", "time"] }
 noema-config = { path = "crates/noema-config" }
 smap = { path = "crates/smap" }
+permanence = { path = "crates/permanence" }
 jobctl = { path = "crates/jobctl"}
+nanoid = "0.5.0"
 
 # Faster optimized iteration profile: thin LTO and parallel codegen compile
 # much faster than the fat-LTO release profile.

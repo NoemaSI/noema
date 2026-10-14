@@ -10,6 +10,9 @@ gpui-kit = "0.7.0"
 anyhow = { workspace = true }
 serde_json = {workspace = true}
 noema-config = { workspace = true }
+permanence = { workspace = true }
+smap = { workspace = true }
+nanoid = {workspace = true }
 
 [features]
 # Opens the create-skill wizard directly against a stubbed jobctl engine

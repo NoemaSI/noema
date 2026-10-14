@@ -111,14 +111,15 @@ fn open_world_view(_window: &mut Window, cx: &mut App) {
     });
 }
 
+
 fn open_system_map_view(_window: &mut Window, cx: &mut App) {
     let window_options = WindowOptions {
+        window_background: WindowBackgroundAppearance::Blurred,
         ..TitleBar::window_options()
     };
-    let _ = cx.open_window(window_options, |window, cx| {
-        let view = cx.new(|cx| SmapView::new(window, cx));
-        // This first level on the window, should be a Root.
-        cx.new(|cx| Root::new(view, window, cx))
+
+    let _ = gpui_kit::open_window(window_options, cx, |window, cx| {
+        cx.new(|cx| SmapView::new(window, cx))
     });
 }
 

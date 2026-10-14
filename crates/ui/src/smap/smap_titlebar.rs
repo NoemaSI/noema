@@ -1,46 +1,48 @@
-use gpui_kit::{AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled, Window, base::IndexPath, component::{IconName, Sizable, TitleBar, button::{Button, ButtonVariants}, menu::AppMenuBar, select::{SearchableVec, Select, SelectState}}, div, px};
+use gpui_kit::{AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled, Window, base::IndexPath, component::{ActiveTheme, Icon, IconName, Sizable, TitleBar, button::{Button, ButtonVariants}, menu::AppMenuBar, select::{SearchableVec, Select, SelectState}}, div, hsla, px, transparent_black};
+
+    // let selectable_states = SearchableVec::new(vec![
+    //     SharedString::new("Apple"),
+    //     SharedString::new("Orange"),
+    //     SharedString::new("Banana"),
+    //     SharedString::new("Grape"),
+    //     SharedString::new("Pineapple"),
+    // ]);
+    //
+    // let select_state = cx.new(|cx| {
+    //     SelectState::new(
+    //         selectable_states,
+    //         Some(IndexPath::default()), // Select first item
+    //         window,
+    //         cx,
+    //     ).searchable(true)
+    // });
+    //
+        // let dropd = Select::new(&self.selected_map)
+        //     .large()
+        //     .w(px(320.));
 
 pub struct SmapTitleBar {
     app_menu_bar: Entity<AppMenuBar>,
-    selected_map: Entity<SelectState<SearchableVec<SharedString>>>,
+    // selected_map: Entity<SelectState<SearchableVec<SharedString>>>,
 }
 
 impl SmapTitleBar {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
 
-        let selectable_states = SearchableVec::new(vec![
-            SharedString::new("Apple"),
-            SharedString::new("Orange"),
-            SharedString::new("Banana"),
-            SharedString::new("Grape"),
-            SharedString::new("Pineapple"),
-        ]);
-
-        let select_state = cx.new(|cx| {
-            SelectState::new(
-                selectable_states,
-                Some(IndexPath::default()), // Select first item
-                window,
-                cx,
-            ).searchable(true)
-        });
 
         Self {
             app_menu_bar: AppMenuBar::new(cx),
-            selected_map: select_state ,
+            // selected_map: select_state ,
         }
     }
 
-    fn render_left(&self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let dropd = Select::new(&self.selected_map)
-            .large()
-            .w(px(320.));
+    fn render_left(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
-            .items_start()
+            .items_center()
             .gap_2()
             .child(self.app_menu_bar.clone())
-            .child(dropd)
+            .child(self.render_pill(cx))
     }
 
     fn render_center(&self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -49,13 +51,36 @@ impl SmapTitleBar {
             .flex_1()
             .items_center()
             .justify_center()
-            // .child(Select::new(&self.selected_map).small())
+        // .child(Select::new(&self.selected_map).small())
+    }
+
+    fn render_pill(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .h(px(24.))
+            .px_2()
+            .rounded(px(8.))
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .text_color(cx.theme().foreground)
+            .child(Icon::new(IconName::SquareTerminal).small())
+            .child("System Map")
+            .child(
+                Button::new("close-pill")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close),
+            )
     }
 }
 
 impl Render for SmapTitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         TitleBar::new()
+            .bg(transparent_black())
             .child(self.render_left(window, cx))
             .child(self.render_center(window, cx))
             .child(

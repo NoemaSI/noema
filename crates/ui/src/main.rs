@@ -147,6 +147,7 @@ fn main() {
                 cx.open_window(
                     WindowOptions {
                         window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        window_background: WindowBackgroundAppearance::Blurred,
                         is_resizable: true,
                         ..Default::default()
                     },
@@ -166,6 +167,7 @@ fn main() {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_background: WindowBackgroundAppearance::Blurred,
                     is_resizable: false,
                     ..Default::default()
                 },

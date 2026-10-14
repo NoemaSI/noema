@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use gpui_kit::base::{TreeItem, TreeState, h_flex};
-use gpui_kit::component::list::ListItem;
-use gpui_kit::component::tree::tree;
+use gpui_kit::component::tree::Tree;
+use gpui_kit::component::{IconName, tree::{tree}, list::{ListItem}};
 use gpui_kit::{AppContext, Entity, ImageFormat, px};
 use gpui_kit::{Context, Image, ImageSource, IntoElement, ParentElement, Render, Styled, Window, base::StyledExt, component::ActiveTheme, div, img};
 
@@ -15,7 +15,6 @@ pub struct MarketView {
     sections: Vec<MarketSection>,
     tree_state: Entity<TreeState>,
 }
-
 
 impl MarketView {
     pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -51,18 +50,37 @@ impl MarketView {
                     .border_0(),
             )
     }
-}
-impl Render for MarketView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let treeview = tree(&self.tree_state, |ix, entry, selected, window, cx| {
+
+    fn render_tree(&self, cx: &mut Context<Self>) -> Tree {
+        tree(&self.tree_state, |ix, entry, selected, window, cx| {
+            let item = entry.item();
+            let icon = if !entry.is_folder() {
+                IconName::BookOpen
+            } else if entry.is_expanded() {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            };
+
             ListItem::new(ix)
+                .selected(selected)
+                .pl(px(16.) * entry.depth() + px(12.)) // Indent based on depth
                 .child(
                     h_flex()
                         .gap_2()
-                        .child(entry.item().label.clone())
+                        .child(icon)
+                        .child(item.label.clone())
                 )
-        });
+                // .on_click(cx.listener(move |_, _, _, _| {
+                //     // Handle item click
+                // }))
+        })
 
+    }
+}
+impl Render for MarketView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let treeview = self.render_tree(cx);
         div()
             .size_full()
             .v_flex()

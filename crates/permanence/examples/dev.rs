@@ -40,5 +40,11 @@ pub fn main (){
     // we print some info about valid system maps
     for map in valid_maps {
         println!("{} elements, {} unknown functions", map.elements.len(), map.discovery_targets().len());
+
+        println!("Elements:");
+        println!("---------");
+        for el in map.elements {
+            println!("- {:#?}", el);
+        }
     }
 }

@@ -11,6 +11,7 @@ use crate::market::market_view::MarketView;
 use crate::not_logged_in::NOEMA_LOGO;
 use crate::FONT_FAMILY;
 use crate::skill::create_skill_view::CreateSkillView;
+use crate::smap::smap_view::SmapView;
 use crate::world::world_view::WorldView;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -110,6 +111,17 @@ fn open_world_view(_window: &mut Window, cx: &mut App) {
     });
 }
 
+fn open_system_map_view(_window: &mut Window, cx: &mut App) {
+    let window_options = WindowOptions {
+        ..TitleBar::window_options()
+    };
+    let _ = cx.open_window(window_options, |window, cx| {
+        let view = cx.new(|cx| SmapView::new(window, cx));
+        // This first level on the window, should be a Root.
+        cx.new(|cx| Root::new(view, window, cx))
+    });
+}
+
 fn open_market_view(_window: &mut Window, cx: &mut App) {
     let _ = cx.open_window(WindowOptions::default(), |window, cx| {
         let view = cx.new(|cx| MarketView::new(window, cx));
@@ -124,6 +136,7 @@ impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let world_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_world_view);
         let market_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_market_view);
+        let smap_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_system_map_view);
         let crate_skill: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_create_skill_view);
         let noop: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_noop);
 
@@ -150,7 +163,7 @@ impl Render for Workspace {
                         WorkspaceItem::SystemMap,
                         "system-map",
                         "System Map",
-                        noop.clone(),
+                        smap_view.clone(),
                         cx,
                     ))
                     .child(self.render_item(

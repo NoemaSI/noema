@@ -2,6 +2,7 @@ mod not_logged_in;
 mod route;
 mod workspace;
 mod world;
+mod smap;
 mod market;
 mod element;
 mod skill;

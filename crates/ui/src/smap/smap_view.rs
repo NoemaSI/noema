@@ -23,9 +23,11 @@ impl SmapView {
         let cfg = NoemaConfig::from_home().expect("unable to read config");
         let system_maps = read_system_maps(&cfg);
 
+        let smap_name = system_maps.first().cloned();
+
         Self {
             logo: Image::from_bytes(ImageFormat::Png, NOEMA_LOGO.to_vec()),
-            title_bar: cx.new(|cx| SmapTitleBar::new(window, cx)),
+            title_bar: cx.new(|cx| SmapTitleBar::new( smap_name, window, cx)),
             system_maps,
         }
     }

@@ -38,6 +38,8 @@ pub mod model;
 pub mod render;
 pub mod validate;
 
+use std::path::PathBuf;
+
 pub use model::{
     Attributes, Direction, Edge, Element, ElementKind, Flow, FlowKind, Function, FunctionStatus,
     InterfaceKind, Port, Relation, Requirement, Signal, SignalRole, State, SystemMap, Transition,
@@ -53,6 +55,12 @@ pub fn schema_json() -> String {
 
     serde_json::to_string_pretty(&schema).expect("the schema always renders")
 }
+
+/// Read a system map from disk
+pub fn read_system_map(path: PathBuf) -> Result<SystemMap, anyhow::Error> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(SystemMap::from_json(&text)?)
+} 
 
 #[cfg(test)]
 mod tests {

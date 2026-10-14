@@ -11224,6 +11224,7 @@ checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 name = "smap"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "schemars 1.2.2",
  "serde",
  "serde_json",

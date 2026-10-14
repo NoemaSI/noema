@@ -1,4 +1,4 @@
-use std::{fs::read_dir, path::PathBuf};
+use std::{fs::{ReadDir, read_dir}, path::PathBuf};
 
 use noema_config::{NoemaConfig, NOEMA_CONFIG_SYSTEMMAP_FOLDER};
 
@@ -6,7 +6,10 @@ pub enum FunctionalDir {
     SystemMap
 }
 
+/// prints the file names of the NOEMA dir for a functional directory
 pub fn print_functional_dir_content(work_dir: &PathBuf, functional_dir: FunctionalDir){
+    // TODO: refactor to use read_functional_dir
+    
     match functional_dir {
         FunctionalDir::SystemMap => {
             let path_on_disk = work_dir.join(NOEMA_CONFIG_SYSTEMMAP_FOLDER);
@@ -26,6 +29,19 @@ pub fn print_functional_dir_content(work_dir: &PathBuf, functional_dir: Function
             if dir_len == 0 {
                 println!("dir is empty");
             }
+        }
+    }
+}
+
+/// returns an iterator of the files of a functional directory in the NOEMA dir
+pub fn read_functional_dir(work_dir: &PathBuf, functional_dir: FunctionalDir) -> ReadDir{
+    match functional_dir {
+        FunctionalDir::SystemMap => {
+            let path_on_disk = work_dir.join(NOEMA_CONFIG_SYSTEMMAP_FOLDER);
+            if !path_on_disk.exists() {
+                println!("{} doesnt exist", path_on_disk.display());
+            }
+            return read_dir(path_on_disk).expect("unable to read path");
         }
     }
 }

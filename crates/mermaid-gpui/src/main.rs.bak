@@ -1,0 +1,121 @@
+//! Demo: renders a couple of Mermaid diagrams natively via the Scene API.
+//!
+//! `cargo run -p mermaid-gpui --profile release-fast`
+
+use gpui_kit::component::Root;
+use gpui_kit::gpui::px;
+use gpui_kit::{
+    AppContext, Bounds, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div,
+    rgb, size,
+};
+use mermaid_gpui::{MermaidScene, MermaidViewer};
+
+const DEMO_SOURCE: &str = r#"
+flowchart TD
+    A[Fetch world] --> B{Cached?}
+    B -- yes --> C[Render scene]
+    B -- no --> D[Layout graph]
+    D --> C
+    C --> E[GPUI paint paths]
+"#;
+
+const SECOND_SOURCE: &str = r#"
+sequenceDiagram
+    participant U as User
+    participant V as View
+    participant M as mmdr
+    U->>V: show diagram
+    V->>M: render_scene(source)
+    M-->>V: Scene { commands }
+    V-->>U: native vectors
+"#;
+
+const THIRD_SOURCE: &str = r#"
+flowchart LR
+    AMB[Ambient Conditions]
+
+    subgraph STAGE1["First Stage"]
+        direction TB
+        M1[Machine 1]
+        M2[Machine 2]
+        M3[Machine 3]
+        CB[Combiner]
+        M1 --> CB
+        M2 --> CB
+        M3 --> CB
+    end
+
+    subgraph STAGE2["Second Stage"]
+        direction TB
+        M4[Machine 4]
+        M5[Machine 5]
+        M4 ==> M5
+    end
+
+    AMB -.-> STAGE1
+    AMB -.-> STAGE2
+    CB --> M4
+    M5 --> OUT[Product
+"#;
+
+struct Demo {
+    primary: Entity<MermaidViewer>,
+    secondary: Entity<MermaidViewer>,
+    third: Entity<MermaidViewer>,
+}
+
+impl Demo {
+    fn new(cx: &mut Context<Self>) -> Self {
+        let options = mermaid_gpui::mermaid_rs_renderer::RenderOptions::default();
+        let primary = MermaidScene::build(DEMO_SOURCE, options.clone())
+            .expect("demo flowchart must render");
+        let secondary = MermaidScene::build(SECOND_SOURCE, options.clone())
+            .expect("demo sequence diagram must render");
+
+        let third = MermaidScene::build(THIRD_SOURCE, options.clone())
+            .expect("third demo diagram must render");
+        Self {
+            primary: cx.new(|_| MermaidViewer::new(primary).id("primary")),
+            secondary: cx.new(|_| MermaidViewer::new(secondary).id("secondary")),
+            third: cx.new(|_| MermaidViewer::new(third).id("third")),
+        }
+    }
+}
+
+impl Render for Demo {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(rgb(0xffffff))
+            .child(div().w(px(600.)).h(px(400.)).child(self.primary.clone()))
+            .child(div().w(px(600.)).h(px(400.)).child(self.secondary.clone()))
+            .child(div().w(px(600.)).h(px(400.)).child(self.third.clone()))
+    }
+}
+
+fn main() {
+    let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+
+    app.run(|cx| {
+        gpui_kit::init(cx);
+
+        let bounds = Bounds::centered(None, size(px(620.), px(820.)), cx);
+        cx.spawn(async move |cx| {
+            cx.open_window(
+                gpui_kit::WindowOptions {
+                    window_bounds: Some(gpui_kit::WindowBounds::Windowed(bounds)),
+                    is_resizable: true,
+                    ..Default::default()
+                },
+                |window, cx| {
+                    let view = cx.new(|cx| Demo::new(cx));
+                    cx.new(|cx| Root::new(view, window, cx))
+                },
+            )
+            .expect("failed to open demo window");
+        })
+        .detach();
+    });
+}

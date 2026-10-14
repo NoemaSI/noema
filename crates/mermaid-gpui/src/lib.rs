@@ -112,17 +112,6 @@ impl MermaidScene {
         if scale <= 0.0 {
             return;
         }
-        {
-            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if n < 40 {
-                eprintln!(
-                    "DBG paint #{n} bounds=({},{},{},{}) zoom={zoom:.3} pan=({},{}) origin=({},{}) scale={scale:.3}",
-                    p(bounds.origin.x), p(bounds.origin.y), p(bounds.size.width), p(bounds.size.height),
-                    p(pan.x), p(pan.y), p(origin.x), p(origin.y),
-                );
-            }
-        }
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             self.paint_commands(&self.scene.commands, origin, scale, 1.0, window);
         });
@@ -639,6 +628,40 @@ impl Render for MermaidViewer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dump_third_svg() {
+        let src = r#"
+flowchart LR
+    AMB[Ambient Conditions]
+
+    subgraph STAGE1["First Stage"]
+        direction TB
+        M1[Machine 1]
+        M2[Machine 2]
+        M3[Machine 3]
+        CB[Combiner]
+        M1 --> CB
+        M2 --> CB
+        M3 --> CB
+    end
+
+    subgraph STAGE2["Second Stage"]
+        direction TB
+        M4[Machine 4]
+        M5[Machine 5]
+        M4 ==> M5
+    end
+
+    AMB -.-> STAGE1
+    AMB -.-> STAGE2
+    CB --> M4
+    M5 --> OUT[Product]
+"#;
+        let svg = mermaid_rs_renderer::render(src).expect("svg render");
+        std::fs::write("/tmp/third_svgcheck.svg", &svg).unwrap();
+        println!("svg len {}", svg.len());
+    }
 
     #[test]
     fn scene_contains_geometry() {

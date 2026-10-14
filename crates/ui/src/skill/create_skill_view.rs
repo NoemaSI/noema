@@ -483,7 +483,7 @@ impl Render for CreateSkillView {
                         cx.notify();
                     }))
                     .child(Tab::new().label("MY SKILLS"))
-                    .child(Tab::new().label("SKILL DRAFTS")),
+                    .child(Tab::new().label("SKILL DRAFTS"))
             )
             .child(
                 div()

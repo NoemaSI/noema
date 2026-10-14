@@ -30,9 +30,38 @@ sequenceDiagram
     V-->>U: native vectors
 "#;
 
+const THIRD_SOURCE: &str = r#"
+flowchart LR
+    AMB[Ambient Conditions]
+
+    subgraph STAGE1["First Stage"]
+        direction TB
+        M1[Machine 1]
+        M2[Machine 2]
+        M3[Machine 3]
+        CB[Combiner]
+        M1 --> CB
+        M2 --> CB
+        M3 --> CB
+    end
+
+    subgraph STAGE2["Second Stage"]
+        direction TB
+        M4[Machine 4]
+        M5[Machine 5]
+        M4 ==> M5
+    end
+
+    AMB -.-> STAGE1
+    AMB -.-> STAGE2
+    CB --> M4
+    M5 --> OUT[Product]
+"#;
+
 struct Demo {
     primary: Entity<MermaidViewer>,
     secondary: Entity<MermaidViewer>,
+    third: Entity<MermaidViewer>,
 }
 
 impl Demo {
@@ -40,11 +69,15 @@ impl Demo {
         let options = mermaid_gpui::mermaid_rs_renderer::RenderOptions::default();
         let primary = MermaidScene::build(DEMO_SOURCE, options.clone())
             .expect("demo flowchart must render");
-        let secondary = MermaidScene::build(SECOND_SOURCE, options)
+        let secondary = MermaidScene::build(SECOND_SOURCE, options.clone())
             .expect("demo sequence diagram must render");
+
+        let third = MermaidScene::build(THIRD_SOURCE, options.clone())
+            .expect("third demo diagram must render");
         Self {
             primary: cx.new(|_| MermaidViewer::new(primary).id("primary")),
             secondary: cx.new(|_| MermaidViewer::new(secondary).id("secondary")),
+            third: cx.new(|_| MermaidViewer::new(third).id("third")),
         }
     }
 }
@@ -56,8 +89,7 @@ impl Render for Demo {
             .flex()
             .flex_col()
             .bg(rgb(0xffffff))
-            .child(div().w(px(600.)).h(px(400.)).child(self.primary.clone()))
-            .child(div().w(px(600.)).h(px(400.)).child(self.secondary.clone()))
+            .child(div().w(px(1920.)).h(px(1080.)).child(self.third.clone()))
     }
 }
 
@@ -72,7 +104,7 @@ fn main() {
             cx.open_window(
                 gpui_kit::WindowOptions {
                     window_bounds: Some(gpui_kit::WindowBounds::Windowed(bounds)),
-                    is_resizable: false,
+                    is_resizable: true,
                     ..Default::default()
                 },
                 |window, cx| {

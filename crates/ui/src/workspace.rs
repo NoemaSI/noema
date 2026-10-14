@@ -16,6 +16,7 @@ use crate::world::world_view::WorldView;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum WorkspaceItem {
     EvolveResearch,
+    SystemMap,
     ViewMarket,
     ResumeSession,
     CreateSkill,
@@ -143,6 +144,13 @@ impl Render for Workspace {
                         "create-skill",
                         "Create skill",
                         crate_skill.clone(),
+                        cx,
+                    ))
+                    .child(self.render_item(
+                        WorkspaceItem::SystemMap,
+                        "system-map",
+                        "System Map",
+                        noop.clone(),
                         cx,
                     ))
                     .child(self.render_item(

@@ -1,0 +1,283 @@
+{
+  "name": "DetergentPackagingLine",
+  "description": "World B (toy T3): filler -> bag buffer -> packer -> box buffer -> palletizer as a saturating flow network. The map states which transfer mechanisms discovery must find; the buffers are elements because the lag says inventory exists.",
+  "elements": [
+    {
+      "name": "PackagingLine",
+      "kind": "system"
+    },
+    {
+      "name": "Filler",
+      "kind": "hardware",
+      "parent": "PackagingLine",
+      "ports": [
+        {
+          "name": "supply",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "control",
+          "direction": "in",
+          "kind": "control"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "commanded_rate",
+          "role": "setpoint",
+          "channel": "rate"
+        }
+      ]
+    },
+    {
+      "name": "BagBuffer",
+      "kind": "container",
+      "parent": "PackagingLine",
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "out",
+          "direction": "out",
+          "kind": "material"
+        }
+      ]
+    },
+    {
+      "name": "Packer",
+      "kind": "hardware",
+      "parent": "PackagingLine",
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "out",
+          "direction": "out",
+          "kind": "material"
+        }
+      ]
+    },
+    {
+      "name": "BoxBuffer",
+      "kind": "container",
+      "parent": "PackagingLine",
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "out",
+          "direction": "out",
+          "kind": "material"
+        }
+      ]
+    },
+    {
+      "name": "Palletizer",
+      "kind": "hardware",
+      "parent": "PackagingLine",
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "throughput",
+          "role": "actual",
+          "channel": "throughput"
+        }
+      ]
+    },
+    {
+      "name": "UpstreamSupply",
+      "kind": "resource",
+      "external": true,
+      "ports": [
+        {
+          "name": "supply",
+          "direction": "out",
+          "kind": "material"
+        }
+      ]
+    },
+    {
+      "name": "LineCommand",
+      "kind": "software",
+      "external": true,
+      "ports": [
+        {
+          "name": "command",
+          "direction": "out",
+          "kind": "control"
+        }
+      ],
+      "description": "The commanded filler rate: an input drive, not part of the line."
+    },
+    {
+      "name": "Shipping",
+      "kind": "organization",
+      "external": true,
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "name": "Bottles",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "UpstreamSupply.supply",
+          "to": "Filler.supply"
+        },
+        {
+          "from": "Filler.output",
+          "to": "BagBuffer.in"
+        },
+        {
+          "from": "BagBuffer.out",
+          "to": "Packer.in"
+        },
+        {
+          "from": "Packer.out",
+          "to": "BoxBuffer.in"
+        },
+        {
+          "from": "BoxBuffer.out",
+          "to": "Palletizer.in"
+        },
+        {
+          "from": "Palletizer.output",
+          "to": "Shipping.in"
+        }
+      ],
+      "description": "One material chain through two containers."
+    },
+    {
+      "name": "RateCommand",
+      "kind": "control",
+      "edges": [
+        {
+          "from": "LineCommand.command",
+          "to": "Filler.control"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "SupplyBottles",
+      "allocated_to": [
+        "UpstreamSupply"
+      ],
+      "status": "given",
+      "writes": [
+        "Bottles"
+      ]
+    },
+    {
+      "name": "Fill",
+      "allocated_to": [
+        "Filler"
+      ],
+      "status": "observed",
+      "reads": [
+        "RateCommand",
+        "Bottles"
+      ],
+      "writes": [
+        "Bottles"
+      ],
+      "description": "Filler passes the commanded rate through; assumed from the drive."
+    },
+    {
+      "name": "BufferDrain",
+      "allocated_to": [
+        "BagBuffer",
+        "BoxBuffer"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Bottles"
+      ],
+      "writes": [
+        "Bottles"
+      ],
+      "description": "The saturating outflow p*B/(K+B) of the two buffers \u2014 the lag discovery must invent."
+    },
+    {
+      "name": "Pack",
+      "allocated_to": [
+        "Packer"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Bottles"
+      ],
+      "writes": [
+        "Bottles"
+      ],
+      "description": "Station throughput with saturation rate p \u2014 V5's degraded packer lives in this parameter."
+    },
+    {
+      "name": "Palletize",
+      "allocated_to": [
+        "Palletizer"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Bottles"
+      ],
+      "writes": [
+        "Bottles"
+      ]
+    },
+    {
+      "name": "Ship",
+      "allocated_to": [
+        "Shipping"
+      ],
+      "status": "given",
+      "reads": [
+        "Bottles"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "REQ_BOTTLENECK",
+      "text": "shift throughput saturates at the weakest station; V5 saturates near 12/min regardless of command",
+      "satisfies": [
+        "Pack",
+        "BufferDrain"
+      ]
+    }
+  ]
+}

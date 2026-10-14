@@ -1,0 +1,1036 @@
+{
+  "name": "TabletLine",
+  "description": "Two-stage tablet manufacturing line as seen in the TCG-style SCADA log: three feed machines and a combiner (stage 1), two finishing machines (stage 2), ambient coupling, every dotted column name bound as a signal. The mermaid the agent read is this map; the map's unknown functions are the mechanisms to find.",
+  "elements": [
+    {
+      "name": "TabletLine",
+      "kind": "system"
+    },
+    {
+      "name": "Stage1",
+      "kind": "subsystem",
+      "parent": "TabletLine",
+      "ports": [
+        {
+          "name": "ambient",
+          "direction": "in",
+          "kind": "environment"
+        }
+      ]
+    },
+    {
+      "name": "Machine1",
+      "kind": "hardware",
+      "parent": "Stage1",
+      "ports": [
+        {
+          "name": "raw",
+          "direction": "in",
+          "kind": "material",
+          "signals": [
+            {
+              "name": "property1",
+              "role": "actual",
+              "channel": "Machine1.RawMaterial.Property1"
+            },
+            {
+              "name": "property2",
+              "role": "actual",
+              "channel": "Machine1.RawMaterial.Property2"
+            },
+            {
+              "name": "property3",
+              "role": "actual",
+              "channel": "Machine1.RawMaterial.Property3"
+            },
+            {
+              "name": "property4",
+              "role": "actual",
+              "channel": "Machine1.RawMaterial.Property4"
+            }
+          ]
+        },
+        {
+          "name": "power",
+          "direction": "in",
+          "kind": "energy"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "feeder",
+          "role": "setpoint",
+          "channel": "Machine1.RawMaterialFeederParameter.U.Actual"
+        },
+        {
+          "name": "zone1_temp",
+          "role": "actual",
+          "channel": "Machine1.Zone1Temperature.C.Actual"
+        },
+        {
+          "name": "zone2_temp",
+          "role": "actual",
+          "channel": "Machine1.Zone2Temperature.C.Actual"
+        },
+        {
+          "name": "motor_amperage",
+          "role": "actual",
+          "channel": "Machine1.MotorAmperage.U.Actual"
+        },
+        {
+          "name": "motor_rpm",
+          "role": "actual",
+          "channel": "Machine1.MotorRPM.C.Actual"
+        },
+        {
+          "name": "material_pressure",
+          "role": "actual",
+          "channel": "Machine1.MaterialPressure.U.Actual"
+        },
+        {
+          "name": "material_temperature",
+          "role": "actual",
+          "channel": "Machine1.MaterialTemperature.U.Actual"
+        },
+        {
+          "name": "exit_zone_temperature",
+          "role": "actual",
+          "channel": "Machine1.ExitZoneTemperature.C.Actual"
+        }
+      ]
+    },
+    {
+      "name": "Machine2",
+      "kind": "hardware",
+      "parent": "Stage1",
+      "ports": [
+        {
+          "name": "raw",
+          "direction": "in",
+          "kind": "material",
+          "signals": [
+            {
+              "name": "property1",
+              "role": "actual",
+              "channel": "Machine2.RawMaterial.Property1"
+            },
+            {
+              "name": "property2",
+              "role": "actual",
+              "channel": "Machine2.RawMaterial.Property2"
+            },
+            {
+              "name": "property3",
+              "role": "actual",
+              "channel": "Machine2.RawMaterial.Property3"
+            },
+            {
+              "name": "property4",
+              "role": "actual",
+              "channel": "Machine2.RawMaterial.Property4"
+            }
+          ]
+        },
+        {
+          "name": "power",
+          "direction": "in",
+          "kind": "energy"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "feeder",
+          "role": "setpoint",
+          "channel": "Machine2.RawMaterialFeederParameter.U.Actual"
+        },
+        {
+          "name": "zone1_temp",
+          "role": "actual",
+          "channel": "Machine2.Zone1Temperature.C.Actual"
+        },
+        {
+          "name": "zone2_temp",
+          "role": "actual",
+          "channel": "Machine2.Zone2Temperature.C.Actual"
+        },
+        {
+          "name": "motor_amperage",
+          "role": "actual",
+          "channel": "Machine2.MotorAmperage.U.Actual"
+        },
+        {
+          "name": "motor_rpm",
+          "role": "actual",
+          "channel": "Machine2.MotorRPM.C.Actual"
+        },
+        {
+          "name": "material_pressure",
+          "role": "actual",
+          "channel": "Machine2.MaterialPressure.U.Actual"
+        },
+        {
+          "name": "material_temperature",
+          "role": "actual",
+          "channel": "Machine2.MaterialTemperature.U.Actual"
+        },
+        {
+          "name": "exit_zone_temperature",
+          "role": "actual",
+          "channel": "Machine2.ExitZoneTemperature.C.Actual"
+        }
+      ]
+    },
+    {
+      "name": "Machine3",
+      "kind": "hardware",
+      "parent": "Stage1",
+      "ports": [
+        {
+          "name": "raw",
+          "direction": "in",
+          "kind": "material",
+          "signals": [
+            {
+              "name": "property1",
+              "role": "actual",
+              "channel": "Machine3.RawMaterial.Property1"
+            },
+            {
+              "name": "property2",
+              "role": "actual",
+              "channel": "Machine3.RawMaterial.Property2"
+            },
+            {
+              "name": "property3",
+              "role": "actual",
+              "channel": "Machine3.RawMaterial.Property3"
+            },
+            {
+              "name": "property4",
+              "role": "actual",
+              "channel": "Machine3.RawMaterial.Property4"
+            }
+          ]
+        },
+        {
+          "name": "power",
+          "direction": "in",
+          "kind": "energy"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "feeder",
+          "role": "setpoint",
+          "channel": "Machine3.RawMaterialFeederParameter.U.Actual"
+        },
+        {
+          "name": "zone1_temp",
+          "role": "actual",
+          "channel": "Machine3.Zone1Temperature.C.Actual"
+        },
+        {
+          "name": "zone2_temp",
+          "role": "actual",
+          "channel": "Machine3.Zone2Temperature.C.Actual"
+        },
+        {
+          "name": "motor_amperage",
+          "role": "actual",
+          "channel": "Machine3.MotorAmperage.U.Actual"
+        },
+        {
+          "name": "motor_rpm",
+          "role": "actual",
+          "channel": "Machine3.MotorRPM.C.Actual"
+        },
+        {
+          "name": "material_pressure",
+          "role": "actual",
+          "channel": "Machine3.MaterialPressure.U.Actual"
+        },
+        {
+          "name": "material_temperature",
+          "role": "actual",
+          "channel": "Machine3.MaterialTemperature.U.Actual"
+        },
+        {
+          "name": "exit_zone_temperature",
+          "role": "actual",
+          "channel": "Machine3.ExitZoneTemperature.C.Actual"
+        }
+      ]
+    },
+    {
+      "name": "Combiner",
+      "kind": "hardware",
+      "parent": "Stage1",
+      "ports": [
+        {
+          "name": "infeed",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material",
+          "signals": [
+            {
+              "name": "measurement0",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement0.U.Actual"
+            },
+            {
+              "name": "measurement0_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement0.U.Setpoint"
+            },
+            {
+              "name": "measurement1",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement1.U.Actual"
+            },
+            {
+              "name": "measurement1_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement1.U.Setpoint"
+            },
+            {
+              "name": "measurement2",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement2.U.Actual"
+            },
+            {
+              "name": "measurement2_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement2.U.Setpoint"
+            },
+            {
+              "name": "measurement3",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement3.U.Actual"
+            },
+            {
+              "name": "measurement3_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement3.U.Setpoint"
+            },
+            {
+              "name": "measurement4",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement4.U.Actual"
+            },
+            {
+              "name": "measurement4_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement4.U.Setpoint"
+            },
+            {
+              "name": "measurement5",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement5.U.Actual"
+            },
+            {
+              "name": "measurement5_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement5.U.Setpoint"
+            },
+            {
+              "name": "measurement6",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement6.U.Actual"
+            },
+            {
+              "name": "measurement6_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement6.U.Setpoint"
+            },
+            {
+              "name": "measurement7",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement7.U.Actual"
+            },
+            {
+              "name": "measurement7_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement7.U.Setpoint"
+            },
+            {
+              "name": "measurement8",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement8.U.Actual"
+            },
+            {
+              "name": "measurement8_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement8.U.Setpoint"
+            },
+            {
+              "name": "measurement9",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement9.U.Actual"
+            },
+            {
+              "name": "measurement9_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement9.U.Setpoint"
+            },
+            {
+              "name": "measurement10",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement10.U.Actual"
+            },
+            {
+              "name": "measurement10_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement10.U.Setpoint"
+            },
+            {
+              "name": "measurement11",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement11.U.Actual"
+            },
+            {
+              "name": "measurement11_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement11.U.Setpoint"
+            },
+            {
+              "name": "measurement12",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement12.U.Actual"
+            },
+            {
+              "name": "measurement12_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement12.U.Setpoint"
+            },
+            {
+              "name": "measurement13",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement13.U.Actual"
+            },
+            {
+              "name": "measurement13_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement13.U.Setpoint"
+            },
+            {
+              "name": "measurement14",
+              "role": "actual",
+              "channel": "Stage1.Output.Measurement14.U.Actual"
+            },
+            {
+              "name": "measurement14_setpoint",
+              "role": "setpoint",
+              "channel": "Stage1.Output.Measurement14.U.Setpoint"
+            }
+          ]
+        }
+      ],
+      "signals": [
+        {
+          "name": "operation_temp1",
+          "role": "actual",
+          "channel": "FirstStage.CombinerOperation.Temperature1.U.Actual"
+        },
+        {
+          "name": "operation_temp2",
+          "role": "actual",
+          "channel": "FirstStage.CombinerOperation.Temperature2.U.Actual"
+        },
+        {
+          "name": "operation_temp3",
+          "role": "actual",
+          "channel": "FirstStage.CombinerOperation.Temperature3.C.Actual"
+        }
+      ]
+    },
+    {
+      "name": "Stage2",
+      "kind": "subsystem",
+      "parent": "TabletLine",
+      "ports": [
+        {
+          "name": "ambient",
+          "direction": "in",
+          "kind": "environment"
+        }
+      ]
+    },
+    {
+      "name": "Machine4",
+      "kind": "hardware",
+      "parent": "Stage2",
+      "ports": [
+        {
+          "name": "infeed",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "power",
+          "direction": "in",
+          "kind": "energy"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "temperature1",
+          "role": "actual",
+          "channel": "Machine4.Temperature1.C.Actual"
+        },
+        {
+          "name": "temperature2",
+          "role": "actual",
+          "channel": "Machine4.Temperature2.C.Actual"
+        },
+        {
+          "name": "pressure",
+          "role": "actual",
+          "channel": "Machine4.Pressure.C.Actual"
+        },
+        {
+          "name": "temperature3",
+          "role": "actual",
+          "channel": "Machine4.Temperature3.C.Actual"
+        },
+        {
+          "name": "temperature4",
+          "role": "actual",
+          "channel": "Machine4.Temperature4.C.Actual"
+        },
+        {
+          "name": "temperature5",
+          "role": "actual",
+          "channel": "Machine4.Temperature5.C.Actual"
+        },
+        {
+          "name": "exit_temperature",
+          "role": "actual",
+          "channel": "Machine4.ExitTemperature.U.Actual"
+        }
+      ]
+    },
+    {
+      "name": "Machine5",
+      "kind": "hardware",
+      "parent": "Stage2",
+      "ports": [
+        {
+          "name": "infeed",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "power",
+          "direction": "in",
+          "kind": "energy"
+        },
+        {
+          "name": "output",
+          "direction": "out",
+          "kind": "material",
+          "signals": [
+            {
+              "name": "measurement0",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement0.U.Actual"
+            },
+            {
+              "name": "measurement0_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement0.U.Setpoint"
+            },
+            {
+              "name": "measurement1",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement1.U.Actual"
+            },
+            {
+              "name": "measurement1_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement1.U.Setpoint"
+            },
+            {
+              "name": "measurement2",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement2.U.Actual"
+            },
+            {
+              "name": "measurement2_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement2.U.Setpoint"
+            },
+            {
+              "name": "measurement3",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement3.U.Actual"
+            },
+            {
+              "name": "measurement3_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement3.U.Setpoint"
+            },
+            {
+              "name": "measurement4",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement4.U.Actual"
+            },
+            {
+              "name": "measurement4_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement4.U.Setpoint"
+            },
+            {
+              "name": "measurement5",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement5.U.Actual"
+            },
+            {
+              "name": "measurement5_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement5.U.Setpoint"
+            },
+            {
+              "name": "measurement6",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement6.U.Actual"
+            },
+            {
+              "name": "measurement6_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement6.U.Setpoint"
+            },
+            {
+              "name": "measurement7",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement7.U.Actual"
+            },
+            {
+              "name": "measurement7_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement7.U.Setpoint"
+            },
+            {
+              "name": "measurement8",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement8.U.Actual"
+            },
+            {
+              "name": "measurement8_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement8.U.Setpoint"
+            },
+            {
+              "name": "measurement9",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement9.U.Actual"
+            },
+            {
+              "name": "measurement9_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement9.U.Setpoint"
+            },
+            {
+              "name": "measurement10",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement10.U.Actual"
+            },
+            {
+              "name": "measurement10_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement10.U.Setpoint"
+            },
+            {
+              "name": "measurement11",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement11.U.Actual"
+            },
+            {
+              "name": "measurement11_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement11.U.Setpoint"
+            },
+            {
+              "name": "measurement12",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement12.U.Actual"
+            },
+            {
+              "name": "measurement12_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement12.U.Setpoint"
+            },
+            {
+              "name": "measurement13",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement13.U.Actual"
+            },
+            {
+              "name": "measurement13_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement13.U.Setpoint"
+            },
+            {
+              "name": "measurement14",
+              "role": "actual",
+              "channel": "Stage2.Output.Measurement14.U.Actual"
+            },
+            {
+              "name": "measurement14_setpoint",
+              "role": "setpoint",
+              "channel": "Stage2.Output.Measurement14.U.Setpoint"
+            }
+          ]
+        }
+      ],
+      "signals": [
+        {
+          "name": "temperature1",
+          "role": "actual",
+          "channel": "Machine5.Temperature1.C.Actual"
+        },
+        {
+          "name": "temperature2",
+          "role": "actual",
+          "channel": "Machine5.Temperature2.C.Actual"
+        },
+        {
+          "name": "temperature3",
+          "role": "actual",
+          "channel": "Machine5.Temperature3.C.Actual"
+        },
+        {
+          "name": "temperature4",
+          "role": "actual",
+          "channel": "Machine5.Temperature4.C.Actual"
+        },
+        {
+          "name": "temperature5",
+          "role": "actual",
+          "channel": "Machine5.Temperature5.C.Actual"
+        },
+        {
+          "name": "temperature6",
+          "role": "actual",
+          "channel": "Machine5.Temperature6.C.Actual"
+        },
+        {
+          "name": "exit_temperature",
+          "role": "actual",
+          "channel": "Machine5.ExitTemperature.U.Actual"
+        }
+      ]
+    },
+    {
+      "name": "AmbientConditions",
+      "kind": "environment",
+      "external": true,
+      "ports": [
+        {
+          "name": "influence",
+          "direction": "out",
+          "kind": "environment"
+        }
+      ],
+      "signals": [
+        {
+          "name": "humidity",
+          "role": "actual",
+          "channel": "AmbientConditions.AmbientHumidity.U.Actual"
+        },
+        {
+          "name": "temperature",
+          "role": "actual",
+          "channel": "AmbientConditions.AmbientTemperature.U.Actual"
+        }
+      ]
+    },
+    {
+      "name": "RawMaterial",
+      "kind": "resource",
+      "external": true,
+      "ports": [
+        {
+          "name": "supply",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "description": "The supplied batches; their four properties are measured at each machine's intake."
+    },
+    {
+      "name": "ElectricalUtility",
+      "kind": "resource",
+      "external": true,
+      "ports": [
+        {
+          "name": "supply",
+          "direction": "out",
+          "kind": "energy"
+        }
+      ]
+    },
+    {
+      "name": "Product",
+      "kind": "abstract",
+      "external": true,
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        }
+      ],
+      "description": "Finished-goods sink; out of the recorded boundary."
+    }
+  ],
+  "flows": [
+    {
+      "name": "RawMaterialFeed",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "RawMaterial.supply",
+          "to": "Machine1.raw"
+        },
+        {
+          "from": "RawMaterial.supply",
+          "to": "Machine2.raw"
+        },
+        {
+          "from": "RawMaterial.supply",
+          "to": "Machine3.raw"
+        }
+      ]
+    },
+    {
+      "name": "Stage1Product",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "Machine1.output",
+          "to": "Combiner.infeed"
+        },
+        {
+          "from": "Machine2.output",
+          "to": "Combiner.infeed"
+        },
+        {
+          "from": "Machine3.output",
+          "to": "Combiner.infeed"
+        },
+        {
+          "from": "Combiner.output",
+          "to": "Machine4.infeed"
+        }
+      ],
+      "description": "M1|M2|M3 -> combiner -> machine 4, the mermaid's stage-1 arrows."
+    },
+    {
+      "name": "Stage2Product",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "Machine4.output",
+          "to": "Machine5.infeed"
+        },
+        {
+          "from": "Machine5.output",
+          "to": "Product.in"
+        }
+      ]
+    },
+    {
+      "name": "ElectricalPower",
+      "kind": "energy",
+      "edges": [
+        {
+          "from": "ElectricalUtility.supply",
+          "to": "Machine1.power"
+        },
+        {
+          "from": "ElectricalUtility.supply",
+          "to": "Machine2.power"
+        },
+        {
+          "from": "ElectricalUtility.supply",
+          "to": "Machine3.power"
+        },
+        {
+          "from": "ElectricalUtility.supply",
+          "to": "Machine4.power"
+        },
+        {
+          "from": "ElectricalUtility.supply",
+          "to": "Machine5.power"
+        }
+      ]
+    },
+    {
+      "name": "AmbientInfluence",
+      "kind": "environment",
+      "edges": [
+        {
+          "from": "AmbientConditions.influence",
+          "to": "Stage1.ambient"
+        },
+        {
+          "from": "AmbientConditions.influence",
+          "to": "Stage2.ambient"
+        }
+      ],
+      "description": "The dashed mermaid arrows: humidity/temperature couple into both stages."
+    }
+  ],
+  "functions": [
+    {
+      "name": "SupplyMaterial",
+      "allocated_to": [
+        "RawMaterial"
+      ],
+      "status": "given",
+      "writes": [
+        "RawMaterialFeed"
+      ]
+    },
+    {
+      "name": "MeterPower",
+      "allocated_to": [
+        "ElectricalUtility"
+      ],
+      "status": "given",
+      "writes": [
+        "ElectricalPower"
+      ]
+    },
+    {
+      "name": "Feed",
+      "allocated_to": [
+        "Machine1",
+        "Machine2",
+        "Machine3"
+      ],
+      "status": "observed",
+      "reads": [
+        "RawMaterialFeed"
+      ],
+      "writes": [
+        "Stage1Product"
+      ],
+      "description": "Feeder parameter drives intake; the log shows the commanded value, the response is data."
+    },
+    {
+      "name": "ShapeStage1",
+      "allocated_to": [
+        "Machine1",
+        "Machine2",
+        "Machine3"
+      ],
+      "status": "unknown",
+      "reads": [
+        "RawMaterialFeed"
+      ],
+      "writes": [
+        "Stage1Product"
+      ],
+      "description": "How zone temperatures, motor RPM, and feeder rate turn raw-material properties into output properties \u2014 the per-machine transfer mechanism."
+    },
+    {
+      "name": "Combine",
+      "allocated_to": [
+        "Combiner"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Stage1Product"
+      ],
+      "writes": [
+        "Stage1Product"
+      ],
+      "description": "How three streams blend into one; combiner operation temperatures are the only internal observables."
+    },
+    {
+      "name": "FinishStage2",
+      "allocated_to": [
+        "Machine4",
+        "Machine5"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Stage1Product"
+      ],
+      "writes": [
+        "Stage2Product"
+      ],
+      "description": "The stage-2 transformation (temperatures/pressure in, final quality measurements out)."
+    },
+    {
+      "name": "HoldTemperatures",
+      "allocated_to": [
+        "Machine1",
+        "Machine2",
+        "Machine3",
+        "Machine4",
+        "Machine5"
+      ],
+      "status": "unknown",
+      "description": "The control loop that keeps zone/exit temperatures near their operating points despite ambient and raw-material drift \u2014 no controller is in the map yet."
+    },
+    {
+      "name": "InspectStageOutputs",
+      "allocated_to": [
+        "Stage1",
+        "Stage2"
+      ],
+      "status": "observed",
+      "reads": [
+        "Stage1Product",
+        "Stage2Product"
+      ],
+      "description": "The StageN.Output.Measurement columns: quality is measured, not modeled."
+    },
+    {
+      "name": "ReceiveProduct",
+      "allocated_to": [
+        "Product"
+      ],
+      "status": "given",
+      "reads": [
+        "Stage2Product"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "REQ_SETPOINTS",
+      "text": "measured stage outputs track their setpoints despite ambient and raw-material drift",
+      "satisfies": [
+        "HoldTemperatures",
+        "FinishStage2"
+      ]
+    }
+  ]
+}

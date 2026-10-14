@@ -1,0 +1,137 @@
+{
+  "name": "BLIBindingAssay",
+  "description": "Biolayer interferometry 1:1 binding experiment: ligand in solution meets an immobilised receptor on the sensor; the wavelength shift is the observable. Association and dissociation are the discovery targets the skill loop answers with a Mechanism.",
+  "elements": [
+    {
+      "name": "Assay",
+      "kind": "system"
+    },
+    {
+      "name": "Biosensor",
+      "kind": "hardware",
+      "parent": "Assay",
+      "ports": [
+        {
+          "name": "analyte",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "response",
+          "direction": "out",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "Receptor",
+      "kind": {
+        "custom": "immobilised-biomolecule"
+      },
+      "parent": "Biosensor"
+    },
+    {
+      "name": "Complex",
+      "kind": {
+        "custom": "bound-complex"
+      },
+      "parent": "Biosensor",
+      "description": "Receptor with ligand bound: the occupancy the response reads out."
+    },
+    {
+      "name": "LigandSolution",
+      "kind": {
+        "custom": "analyte"
+      },
+      "external": true,
+      "ports": [
+        {
+          "name": "titrate",
+          "direction": "out",
+          "kind": "material"
+        }
+      ]
+    },
+    {
+      "name": "Reader",
+      "kind": "hardware",
+      "external": true,
+      "ports": [
+        {
+          "name": "read",
+          "direction": "in",
+          "kind": "data"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "name": "Analyte",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "LigandSolution.titrate",
+          "to": "Biosensor.analyte"
+        }
+      ]
+    },
+    {
+      "name": "Response",
+      "kind": "data",
+      "edges": [
+        {
+          "from": "Biosensor.response",
+          "to": "Reader.read"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "ImmobiliseReceptor",
+      "allocated_to": [
+        "Receptor"
+      ],
+      "status": "given"
+    },
+    {
+      "name": "Associate",
+      "allocated_to": [
+        "Receptor",
+        "Complex"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Analyte"
+      ],
+      "description": "1:1 association, kon * L * R \u2014 the mechanism the theorist proposes in the skill loop."
+    },
+    {
+      "name": "Dissociate",
+      "allocated_to": [
+        "Complex"
+      ],
+      "status": "unknown",
+      "description": "koff * Complex."
+    },
+    {
+      "name": "ReadResponse",
+      "allocated_to": [
+        "Reader"
+      ],
+      "status": "given",
+      "reads": [
+        "Response"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "custom",
+      "relation": "realises",
+      "from": "Associate",
+      "to": "Biosensor.response"
+    }
+  ]
+}

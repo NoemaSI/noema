@@ -9,6 +9,7 @@ use crate::env::{
 mod env;
 
 pub const NOEMA_CONFIG_FILE: &str = "config.json";
+pub const NOEMA_CONFIG_SYSTEMMAP_FOLDER: &str = "smap";
 
     
 pub fn noema_path() -> Option<PathBuf> {

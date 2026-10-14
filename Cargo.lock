@@ -8674,6 +8674,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "permanence"
+version = "0.1.0"
+dependencies = [
+ "noema-config",
+ "smap",
+]
+
+[[package]]
 name = "permutation"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11211,6 +11219,15 @@ name = "smallvec"
 version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
+
+[[package]]
+name = "smap"
+version = "0.1.0"
+dependencies = [
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "smol"

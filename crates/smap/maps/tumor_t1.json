@@ -1,0 +1,232 @@
+{
+  "name": "TumorDoseResponse",
+  "description": "World A tier T1 map: a dose is administered, tumour volume is measured; the map asserts the mechanisms discovery must find \u2014 including the unobservable drug compartment, which exists in the map only through its effects (attributes.inferred).",
+  "elements": [
+    {
+      "name": "Study",
+      "kind": "system"
+    },
+    {
+      "name": "Tumor",
+      "kind": {
+        "custom": "tissue"
+      },
+      "parent": "Study",
+      "ports": [
+        {
+          "name": "volume",
+          "direction": "out",
+          "kind": "data",
+          "signals": [
+            {
+              "name": "tumour_volume",
+              "role": "actual",
+              "channel": "tumor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SensitiveCells",
+      "kind": {
+        "custom": "cell-population"
+      },
+      "parent": "Tumor",
+      "ports": [
+        {
+          "name": "kill_in",
+          "direction": "in",
+          "kind": "control"
+        }
+      ]
+    },
+    {
+      "name": "ResistantCells",
+      "kind": {
+        "custom": "cell-population"
+      },
+      "parent": "Tumor"
+    },
+    {
+      "name": "DrugLevel",
+      "kind": {
+        "custom": "drug-concentration"
+      },
+      "parent": "Study",
+      "ports": [
+        {
+          "name": "in",
+          "direction": "in",
+          "kind": "material"
+        },
+        {
+          "name": "effect",
+          "direction": "out",
+          "kind": "control"
+        }
+      ],
+      "description": "Unobservable compartment invented from the suppression-then-regrowth signature.",
+      "attributes": {
+        "inferred": true
+      }
+    },
+    {
+      "name": "Dosing",
+      "kind": "procedure",
+      "external": true,
+      "ports": [
+        {
+          "name": "administer",
+          "direction": "out",
+          "kind": "material"
+        }
+      ],
+      "signals": [
+        {
+          "name": "dose",
+          "role": "setpoint",
+          "channel": "dose"
+        }
+      ]
+    },
+    {
+      "name": "Assay",
+      "kind": "procedure",
+      "external": true,
+      "ports": [
+        {
+          "name": "measure",
+          "direction": "in",
+          "kind": "data"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "name": "Dose",
+      "kind": "material",
+      "edges": [
+        {
+          "from": "Dosing.administer",
+          "to": "DrugLevel.in"
+        }
+      ]
+    },
+    {
+      "name": "Killing",
+      "kind": "control",
+      "edges": [
+        {
+          "from": "DrugLevel.effect",
+          "to": "SensitiveCells.kill_in"
+        }
+      ]
+    },
+    {
+      "name": "VolumeReading",
+      "kind": "data",
+      "edges": [
+        {
+          "from": "Tumor.volume",
+          "to": "Assay.measure"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "AdministerDose",
+      "allocated_to": [
+        "Dosing"
+      ],
+      "status": "given",
+      "writes": [
+        "Dose"
+      ]
+    },
+    {
+      "name": "MeasureVolume",
+      "allocated_to": [
+        "Assay"
+      ],
+      "status": "given",
+      "reads": [
+        "VolumeReading"
+      ]
+    },
+    {
+      "name": "Grow",
+      "allocated_to": [
+        "SensitiveCells",
+        "ResistantCells"
+      ],
+      "status": "unknown",
+      "description": "Logistic growth with competition for shared capacity; resistant lines may grow faster."
+    },
+    {
+      "name": "Kill",
+      "allocated_to": [
+        "DrugLevel"
+      ],
+      "status": "unknown",
+      "reads": [
+        "Dose"
+      ],
+      "description": "Saturating kill of sensitive cells by drug level (Hill-like)."
+    },
+    {
+      "name": "ClearDrug",
+      "allocated_to": [
+        "DrugLevel"
+      ],
+      "status": "unknown",
+      "description": "First-order clearance of the unobservable drug compartment."
+    },
+    {
+      "name": "EmergeResistance",
+      "allocated_to": [
+        "ResistantCells"
+      ],
+      "status": "unknown",
+      "description": "Regrowth after suppression: what creates or enriches the resistant population."
+    }
+  ],
+  "states": [
+    {
+      "name": "growing",
+      "owner": "Tumor"
+    },
+    {
+      "name": "suppressed",
+      "owner": "Tumor"
+    },
+    {
+      "name": "regrowing",
+      "owner": "Tumor"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "Tumor.growing",
+      "to": "Tumor.suppressed",
+      "trigger": "dose near or above EC50"
+    },
+    {
+      "from": "Tumor.suppressed",
+      "to": "Tumor.regrowing",
+      "trigger": "resistant population takes over"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "REQ_REGROWTH",
+      "text": "high-dose curves suppress then regrow by day 60; a single-compartment Hill model must fail validation",
+      "satisfies": [
+        "Kill",
+        "EmergeResistance"
+      ]
+    }
+  ]
+}

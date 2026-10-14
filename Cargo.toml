@@ -13,6 +13,7 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 sha2 = "0.10.9"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "sync", "time"] }
 noema-config = { path = "crates/noema-config" }
+smap = { path = "crates/smap" }
 jobctl = { path = "crates/jobctl"}
 
 # Faster optimized iteration profile: thin LTO and parallel codegen compile

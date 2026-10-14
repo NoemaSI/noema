@@ -93,41 +93,46 @@ fn construct_system_maps_tree(system_maps: &Vec<SystemMap>) -> Vec<TreeItem>{
         for sub in subsystems {
             let id = nanoid!();
             let mut sub_tree_item = TreeItem::new(id, &sub.name);
-            // find all items that name this item as parent
-            let sub_children = &temporary_skipped.iter().filter(|item| item.parent == Some(sub.name.clone())).collect::<Vec<_>>();
-            for child in sub_children {
-                let id = nanoid!();
-                let tree_child = TreeItem::new(id, &child.name);
-                sub_tree_item = sub_tree_item.child(tree_child);
-            }
+            // find all items that name this item as parent and "drain the temporary_skipped" of it
+            let (matched, rest): (Vec<_>, Vec<_>) = temporary_skipped
+                .into_iter()
+                .partition(|item| item.parent.as_deref() == Some(sub.name.as_str()));
+            temporary_skipped = rest;
 
+            for child in matched {
+                sub_tree_item = sub_tree_item.child(TreeItem::new(nanoid!(), &child.name));
+            }
             tree_item = tree_item.child(sub_tree_item);
+
+            // let sub_children = &temporary_skipped.iter().filter(|item| item.parent == Some(sub.name.clone())).collect::<Vec<_>>();
+            // for child in sub_children {
+            //     let id = nanoid!();
+            //     let tree_child = TreeItem::new(id, &child.name);
+            //     sub_tree_item = sub_tree_item.child(tree_child);
+            // }
+            //
+            // tree_item = tree_item.child(sub_tree_item);
 
         }
 
         tree_items.push(tree_item);
+
+        for other_item in temporary_skipped.drain(..) {
+            tree_items.push(TreeItem::new(nanoid!(), &other_item.name.clone()));
+        }
+
+        // should be empty by now
+        assert_eq!(temporary_skipped.len(), 0);
+
 
     }
 
     // NOTE:
     // Rules:
     // - [x] Top Entry (system) is irrelevant
-    // - [ ] First level is Subsystem e.g. Stage1
+    // - [x] First level is Subsystem e.g. Stage1
     // - [ ] kind determines icon e.g. hardware
-    // - [ ] its a child if it has a parent
-    // - [ ] 
-    // - [ ]
-    // - [ ]
-    // - [ ]
-
-    // let tree_items = vec![
-    //             TreeItem::new("src", "src")
-    //                 .expanded(true)
-    //                 .child(TreeItem::new("src/lib.rs", "lib.rs"))
-    //                 .child(TreeItem::new("src/main.rs", "main.rs")),
-    //             TreeItem::new("Cargo.toml", "Cargo.toml"),
-    //             TreeItem::new("README.md", "README.md"),
-    // ];
+    // - [x] its a child if it has a parent
 
     tree_items
 }

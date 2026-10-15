@@ -401,8 +401,8 @@ impl FlatGraph {
         let theme_label = if self.light { "light" } else { "dark" };
 
         div()
-            .px_6()
-            .pt_4()
+            .px_0()
+            .pt_0()
             .pb_2()
             .border_b_1()
             .border_color(s.border)
@@ -417,7 +417,7 @@ impl FlatGraph {
                     .child(
                         div().flex().items_center().gap(px(10.)).child(
                             div().text_size(px(18.)).font_weight(FontWeight(700.0)).child(self.model.map.name.clone()),
-                        ).child(div().text_size(px(13.)).text_color(s.dim).child("map of understanding")),
+                        ).child(div().text_size(px(13.)).text_color(s.dim).child("system map")),
                     )
                     .child(div().flex_1())
                     .child(
@@ -471,7 +471,7 @@ impl FlatGraph {
         let r = self.model.map.requirements.first().cloned();
         let r = r?;
         let mut d = div()
-            .mx_6()
+            .mx_0()
             .my(px(8.))
             .p(px(8.))
             .rounded(px(6.))
@@ -485,12 +485,12 @@ impl FlatGraph {
             .gap(px(8.))
             .overflow_hidden()
             .child(div().font_weight(FontWeight(700.0)).text_color(s.text).child(r.id));
-        d = d.child(format!("\"{}\"", r.text));
+        // d = d.child(format!("\"{}\"", r.text));
         for n in &r.satisfies {
             let st = self.model.fn_by_name(n).map(|f| model::status_str(f.status).to_string()).unwrap_or_default();
             d = d.child(chip(n, s.dim)).child(status_chip(&st, s));
         }
         let unk = r.satisfies.iter().filter(|n| self.model.fn_by_name(n).map(|f| f.status == FunctionStatus::Unknown).unwrap_or(false)).count();
-        Some(d.child(div().text_color(s.faint).child(format!("∴ this claim currently rests on {} unknown mechanisms", unk))))
+        Some(d.child(div().text_color(s.faint).child(format!("currently {} unknown mechanisms", unk))))
     }
 }

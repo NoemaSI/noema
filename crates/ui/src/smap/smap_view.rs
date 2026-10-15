@@ -1,21 +1,23 @@
 use std::sync::Arc;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::{IconName, TitleBar};
-use gpui_kit::{AppContext, ImageFormat, hsla, px};
+use gpui_kit::{AppContext, Entity, ImageFormat, hsla, px};
 use gpui_kit::{Context, Image, ImageSource, IntoElement, ParentElement, Render, Styled, Window, base::StyledExt, component::ActiveTheme, div, img};
 use noema_config::NoemaConfig;
 use smap::SystemMap;
 
 use crate::not_logged_in::NOEMA_LOGO;
 use crate::FONT_FAMILY;
+use crate::smap::flatgraph::view::FlatGraph;
 use crate::smap::smap_titlebar::SmapTitleBar;
 use crate::smap::smap_utils::read_system_maps;
 
 pub struct SmapView {
     logo: Image,
-    title_bar: gpui_kit::Entity<SmapTitleBar>,
+    title_bar: Entity<SmapTitleBar>,
     system_maps: Vec<SystemMap>,
     active_smap: Option<SystemMap>,
+    flat_graph: Entity<FlatGraph>
 }
 
 
@@ -25,11 +27,14 @@ impl SmapView {
         let system_maps = read_system_maps(&cfg);
         let active_smap = system_maps.first().cloned();
 
+        let flat_graph = cx.new(|cx| FlatGraph::new(active_smap.clone(), window, cx));
+
         Self {
             logo: Image::from_bytes(ImageFormat::Png, NOEMA_LOGO.to_vec()),
             title_bar: cx.new(|cx| SmapTitleBar::new( active_smap.clone(), window, cx)),
             system_maps,
             active_smap,
+            flat_graph,
         }
     }
 
@@ -41,9 +46,16 @@ impl SmapView {
 
         div()
             .text_lg()
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .v_flex()
             .child(
-               smap_name.to_string()
-                
+                div()
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.flat_graph.clone())
             )
             .into_any_element()
     }

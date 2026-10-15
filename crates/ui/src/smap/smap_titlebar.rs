@@ -1,26 +1,6 @@
 use gpui_kit::{AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled, Window, base::IndexPath, component::{ActiveTheme, Icon, IconName, Sizable, TitleBar, button::{Button, ButtonVariants}, menu::AppMenuBar, select::{SearchableVec, Select, SelectState}}, div, hsla, prelude::FluentBuilder, px, transparent_black};
 use smap::SystemMap;
 
-    // let selectable_states = SearchableVec::new(vec![
-    //     SharedString::new("Apple"),
-    //     SharedString::new("Orange"),
-    //     SharedString::new("Banana"),
-    //     SharedString::new("Grape"),
-    //     SharedString::new("Pineapple"),
-    // ]);
-    //
-    // let select_state = cx.new(|cx| {
-    //     SelectState::new(
-    //         selectable_states,
-    //         Some(IndexPath::default()), // Select first item
-    //         window,
-    //         cx,
-    //     ).searchable(true)
-    // });
-    //
-        // let dropd = Select::new(&self.selected_map)
-        //     .large()
-        //     .w(px(320.));
 
 pub struct SmapTitleBar {
     app_menu_bar: Entity<AppMenuBar>,
@@ -35,7 +15,6 @@ impl SmapTitleBar {
         Self {
             app_menu_bar: AppMenuBar::new(cx),
             current_open,
-            // selected_map: select_state ,
         }
     }
 
@@ -73,7 +52,7 @@ impl SmapTitleBar {
             .items_center()
             .gap_2()
             .h(px(24.))
-            .px_2()
+            .p_3()
             .rounded(px(8.))
             //.bg(cx.theme().background)
             .bg(hsla(0.0, 0.0, 0.0, 0.1))
@@ -116,3 +95,24 @@ impl Render for SmapTitleBar {
             )
     }
 }
+
+// let selectable_states = SearchableVec::new(vec![
+//     SharedString::new("Apple"),
+//     SharedString::new("Orange"),
+//     SharedString::new("Banana"),
+//     SharedString::new("Grape"),
+//     SharedString::new("Pineapple"),
+// ]);
+//
+// let select_state = cx.new(|cx| {
+//     SelectState::new(
+//         selectable_states,
+//         Some(IndexPath::default()), // Select first item
+//         window,
+//         cx,
+//     ).searchable(true)
+// });
+//
+    // let dropd = Select::new(&self.selected_map)
+    //     .large()
+    //     .w(px(320.));

@@ -15,6 +15,7 @@ pub struct SmapView {
     logo: Image,
     title_bar: gpui_kit::Entity<SmapTitleBar>,
     system_maps: Vec<SystemMap>,
+    active_smap: Option<SystemMap>,
 }
 
 
@@ -22,17 +23,33 @@ impl SmapView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let cfg = NoemaConfig::from_home().expect("unable to read config");
         let system_maps = read_system_maps(&cfg);
-
-        let smap_name = system_maps.first().cloned();
+        let active_smap = system_maps.first().cloned();
 
         Self {
             logo: Image::from_bytes(ImageFormat::Png, NOEMA_LOGO.to_vec()),
-            title_bar: cx.new(|cx| SmapTitleBar::new( smap_name, window, cx)),
+            title_bar: cx.new(|cx| SmapTitleBar::new( active_smap.clone(), window, cx)),
             system_maps,
+            active_smap,
         }
+    }
+
+    fn render_main_card(&mut self , cx: &mut Context<Self>) -> impl IntoElement {
+        let smap_name = match &self.active_smap {
+            Some(map) => &map.name,
+            None => &"n/a".to_string()
+        };
+
+        div()
+            .text_lg()
+            .child(
+               smap_name.to_string()
+                
+            )
+            .into_any_element()
     }
 }
 impl Render for SmapView {
+
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
@@ -53,8 +70,9 @@ impl Render for SmapView {
                     .v_flex()
                     .items_start()
                     .px_4()
-                    .pt_8()
+                    .pt_4()
                     .gap_y_3()
+                    .child(self.render_main_card(cx))
             )
     }
 }

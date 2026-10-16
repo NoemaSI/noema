@@ -9,7 +9,7 @@ use noema_config::{NOEMA_CONFIG_FILE, NoemaConfig, noema_path};
 
 use crate::market::market_view::MarketView;
 use crate::not_logged_in::NOEMA_LOGO;
-use crate::FONT_FAMILY;
+use crate::{CliArgs, FONT_FAMILY};
 use crate::skill::create_skill_view::CreateSkillView;
 use crate::smap::smap_view::SmapView;
 use crate::world::world_view::WorldView;
@@ -28,17 +28,24 @@ pub struct Workspace {
     logo: Image,
     selected: WorkspaceItem,
     config: NoemaConfig,
+    cli_args: CliArgs,
 }
 
 impl Workspace {
-    pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    pub fn new(cli_args: CliArgs ,window: &mut Window, cx: &mut Context<Self>) -> Self {
         let noema_path = noema_path().expect("unable to read noema path");
         let config = NoemaConfig::from_home().expect(format!("unable to read config file from {}", noema_path.join(NOEMA_CONFIG_FILE).display()).as_str());
+
+
+        if let Some(ref smap_file) = cli_args.smap {
+            open_system_map_view(Some(smap_file.clone()), window, cx);
+        }
 
         Self {
             logo: Image::from_bytes(ImageFormat::Png, NOEMA_LOGO.to_vec()),
             selected: WorkspaceItem::EvolveResearch,
-            config
+            config,
+            cli_args,
         }
     }
 
@@ -56,6 +63,43 @@ impl Workspace {
             )
     }
 
+    fn render_item_with_opt_string_param(
+        &self,
+        item: WorkspaceItem,
+        id: &'static str,
+        label: &'static str,
+        open: Rc<dyn Fn(Option<String>, &mut Window, &mut App)>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let selected = self.selected == item;
+        div()
+            .id(id)
+            .w(px(360.))
+            .p_3()
+            .cursor_pointer()
+            .rounded(px(4.))
+            .border_1()
+            .border_color(if selected {
+                cx.theme().accent
+            } else {
+                cx.theme().border
+            })
+            .bg(if selected {
+                cx.theme().overlay
+            } else {
+                cx.theme().background
+            })
+            .font_family(FONT_FAMILY)
+            .child(label)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.selected = item;
+
+                // open a new window with the view
+                open(None, window, cx);
+
+                cx.notify();
+            }))
+    }
     fn render_item(
         &self,
         item: WorkspaceItem,
@@ -112,14 +156,14 @@ fn open_world_view(_window: &mut Window, cx: &mut App) {
 }
 
 
-fn open_system_map_view(_window: &mut Window, cx: &mut App) {
+fn open_system_map_view(smap_file: Option<String>, _window: &mut Window, cx: &mut App) {
     let window_options = WindowOptions {
         window_background: WindowBackgroundAppearance::Blurred,
         ..TitleBar::window_options()
     };
 
     let _ = gpui_kit::open_window(window_options, cx, |window, cx| {
-        cx.new(|cx| SmapView::new(window, cx))
+        cx.new(|cx| SmapView::new(smap_file, window, cx))
     });
 }
 
@@ -137,7 +181,7 @@ impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let world_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_world_view);
         let market_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_market_view);
-        let smap_view: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_system_map_view);
+        let smap_view: Rc<dyn Fn(Option<String>, &mut Window, &mut App)> = Rc::new(open_system_map_view);
         let crate_skill: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_create_skill_view);
         let noop: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(open_noop);
 
@@ -160,7 +204,7 @@ impl Render for Workspace {
                         crate_skill.clone(),
                         cx,
                     ))
-                    .child(self.render_item(
+                    .child(self.render_item_with_opt_string_param(
                         WorkspaceItem::SystemMap,
                         "system-map",
                         "System Map",

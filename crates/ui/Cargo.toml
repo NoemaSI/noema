@@ -13,6 +13,7 @@ noema-config = { workspace = true }
 permanence = { workspace = true }
 smap = { workspace = true }
 nanoid = {workspace = true }
+clap = { version = "4.6.7", features = ["derive"] }
 
 [features]
 # Opens the create-skill wizard directly against a stubbed jobctl engine

@@ -9,6 +9,7 @@ mod skill;
 
 use std::{borrow::Cow, fs, path::Path, rc::Rc};
 
+use clap::Parser;
 use gpui_kit::component::*;
 use gpui_kit::*;
 
@@ -39,6 +40,16 @@ pub const TEXT_LG:   Pixels = px(16.0);
 const LAUNCHER_WIDTH:  Pixels = px(400.);
 const LAUNCHER_HEIGHT: Pixels = px(600.);
 
+
+/// Cli Args
+#[derive(Parser, Debug)]
+#[command(version, about, long_about=None)]
+struct CliArgs {
+    /// Launch SmapViewer with JSON file
+    #[arg(short, long, value_name="SYSTEM_MAP_FILE.json")]
+    smap: Option<String>
+}
+
 struct AppRoot {
     route: Route,
     not_logged_in: Entity<NotLoggedIn>,
@@ -47,8 +58,10 @@ struct AppRoot {
 
 impl AppRoot {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let cli_args = CliArgs::parse();
+
         let not_logged_in = cx.new(|cx| NotLoggedIn::new(window, cx));
-        let workspace = cx.new(|cx| Workspace::new(window, cx));
+        let workspace = cx.new(|cx| Workspace::new(cli_args, window, cx));
         cx.subscribe(&not_logged_in, |this, _, _: &LoginClicked, cx| {
             this.route = Route::Workspace;
             cx.notify();

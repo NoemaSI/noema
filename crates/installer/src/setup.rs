@@ -11,6 +11,8 @@ use anyhow::Result;
 use crate::component::{self, Action, Component, Ctx};
 use crate::detect::{self, Target};
 use crate::download::{self, Fetcher};
+use crate::manifest;
+use crate::noema;
 use crate::pixi::PixiComponent;
 use crate::prefix;
 use crate::prereqs;
@@ -19,10 +21,31 @@ use crate::rumoca::RumocaComponent;
 use crate::rust::RustupComponent;
 use crate::state::{State, now_secs};
 
-pub const COMPONENT_NAMES: [&str; 3] = ["rust", "pixi", "rumoca"];
+pub const COMPONENT_NAMES: [&str; 4] = ["rust", "pixi", "rumoca", "noema"];
 
-pub fn components() -> Vec<Box<dyn Component>> {
-    vec![Box::new(RustupComponent), Box::new(PixiComponent), Box::new(RumocaComponent)]
+/// The noema source component spec for one run.
+pub struct NoemaSpec {
+    pub repo: Option<String>,
+    /// Exact commit sha to install, or [`noema::ANY_VERSION`] for
+    /// verification without a named ref.
+    pub pinned: String,
+    pub requested_ref: String,
+}
+
+pub fn components(noema: Option<NoemaSpec>) -> Vec<Box<dyn Component>> {
+    let mut components: Vec<Box<dyn Component>> = vec![
+        Box::new(RustupComponent),
+        Box::new(PixiComponent),
+        Box::new(RumocaComponent),
+    ];
+    if let Some(spec) = noema {
+        components.push(Box::new(noema::NoemaComponent::new(
+            spec.repo,
+            spec.pinned,
+            spec.requested_ref,
+        )));
+    }
+    components
 }
 
 pub struct Options {
@@ -33,6 +56,11 @@ pub struct Options {
     pub json: bool,
     /// The `noema-setup` binary always uses `Enforce`.
     pub verification: download::Verification,
+    /// Source ref (branch/tag/sha) for the noema component; defaults
+    /// to [`manifest::NOEMA_DEFAULT_REF`].
+    pub noema_ref: Option<String>,
+    /// GitHub `owner/repo` override for the noema component.
+    pub noema_repo: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +108,27 @@ pub fn run(fetcher: &dyn Fetcher, options: &Options) -> Result<Outcome> {
     let mut results = Vec::new();
     let mut requested = Vec::new();
 
-    for component in components() {
+    // The noema component builds from source; resolve its ref to an
+    // exact commit first (skipped for dry runs and when excluded).
+    let include_noema = options.only.is_empty() || options.only.iter().any(|n| n == "noema");
+    let noema_spec = include_noema.then(|| {
+        let requested_ref = options
+            .noema_ref
+            .clone()
+            .unwrap_or_else(|| manifest::NOEMA_DEFAULT_REF.to_string());
+        let repo = options
+            .noema_repo
+            .as_deref()
+            .unwrap_or(manifest::NOEMA_REPO);
+        let pinned = if options.dry_run {
+            requested_ref.clone()
+        } else {
+            noema::resolve_ref(fetcher, repo, &requested_ref)?
+        };
+        Ok::<_, anyhow::Error>(NoemaSpec { repo: options.noema_repo.clone(), pinned, requested_ref })
+    }).transpose()?;
+
+    for component in components(noema_spec) {
         if !options.only.is_empty() && !options.only.iter().any(|n| n == component.name()) {
             continue;
         }
@@ -149,12 +197,28 @@ fn validate_only(only: &[String], requested: &[&'static str]) -> Result<()> {
 /// Probe every managed component and report whether it matches the
 /// pinned version. Exits nonzero (via the caller) when anything is
 /// missing or stale.
-pub fn verify(root: &Path, json: bool, only: &[String]) -> Result<Outcome> {
+pub fn verify(
+    root: &Path,
+    json: bool,
+    only: &[String],
+    noema_ref: Option<String>,
+    noema_repo: Option<String>,
+    fetcher: &dyn Fetcher,
+) -> Result<Outcome> {
     let report = Report::new(json);
     let target = detect::host()?;
     report.note(&format!("root:     {}", root.display()));
+    let pinned = match &noema_ref {
+        Some(r) => noema::resolve_ref(fetcher, noema_repo.as_deref().unwrap_or(manifest::NOEMA_REPO), r)?,
+        None => noema::ANY_VERSION.to_string(),
+    };
+    let spec = NoemaSpec {
+        repo: noema_repo,
+        pinned,
+        requested_ref: noema_ref.unwrap_or_else(|| "*installed*".to_string()),
+    };
     let mut results = Vec::new();
-    for component in components() {
+    for component in components(Some(spec)) {
         if !only.is_empty() && !only.iter().any(|n| n == component.name()) {
             continue;
         }
@@ -193,12 +257,30 @@ mod tests {
     use super::*;
     use crate::download::sha256_hex;
 
+    const STUB_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    /// Build a minimal zip archive the way GitHub source archives look
+    /// (single top-level directory).
+    fn build_zip(top: &str, files: &[(&str, &str)]) -> Vec<u8> {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = SimpleFileOptions::default();
+        for (path, content) in files {
+            writer.start_file(format!("{top}/{path}"), options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
+
     /// A fetcher that serves fake binaries which report the pinned
     /// versions, so the full flow runs offline. For rustup-init it
     /// serves a shell script that fabricates the shim layout rustup
-    /// would leave behind.
+    /// would leave behind, with a cargo stub that "builds" the -p
+    /// packages as executable stubs. GitHub API/zip URLs are served
+    /// with synthetic commit metadata and archives.
     struct FakeToolchainFetcher {
-        scripts: Vec<(&'static str, Vec<u8>)>,
+        routes: Vec<(&'static str, Vec<u8>)>,
     }
 
     impl FakeToolchainFetcher {
@@ -210,14 +292,35 @@ mod tests {
 # Minimal rustup-init stand-in: creates the shim layout and exits.
 test "$1" = "-y" || exit 2
 mkdir -p "$CARGO_HOME/bin"
+cat > "$CARGO_HOME/bin/tool" <<'EOF'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo "rustc 1.89.0 (faked 2025-08-14)"; exit 0; fi
+prev=""
+for a in "$@"; do
+    if [ "$prev" = "-p" ]; then
+        mkdir -p target/release
+        printf '#!/bin/sh\necho "%s 0.0.0"\n' "$a" > "target/release/$a"
+        chmod +x "target/release/$a"
+    fi
+    prev="$a"
+done
+exit 0
+EOF
 for tool in rustup rustc cargo; do
-    printf '#!/bin/sh\necho "rustc 1.89.0 (faked 2025-08-14)"\n' > "$CARGO_HOME/bin/$tool"
+    cp "$CARGO_HOME/bin/tool" "$CARGO_HOME/bin/$tool"
     chmod +x "$CARGO_HOME/bin/$tool"
 done
 exit 0
 "#.to_vec();
+            let app_zip = build_zip(
+                "noema-main",
+                &[("Cargo.toml", "# noema workspace\n"), ("crates/pack/Cargo.toml", "[package]\n")],
+            );
+            let commit_json = format!("{{\"sha\":\"{STUB_SHA}\"}}").into_bytes();
             Self {
-                scripts: vec![
+                routes: vec![
+                    ("api.github.com", commit_json),
+                    ("/archive/", app_zip),
                     ("rustup-init", rustup_init),
                     ("pixi-", fake("pixi", "0.82.0")),
                     ("rumoca-", fake("rumoca", "0.9.20")),
@@ -228,7 +331,7 @@ exit 0
 
     impl Fetcher for FakeToolchainFetcher {
         fn fetch(&self, url: &str) -> Result<Vec<u8>> {
-            for (needle, body) in &self.scripts {
+            for (needle, body) in &self.routes {
                 if url.contains(needle) {
                     return Ok(body.clone());
                 }
@@ -245,6 +348,8 @@ exit 0
             json: false,
             // Tests serve synthetic stub binaries; the CLI enforces.
             verification: download::Verification::TrustFetcher,
+            noema_ref: None,
+            noema_repo: None,
         }
     }
 
@@ -261,18 +366,24 @@ exit 0
 
         let outcome = run(&FakeToolchainFetcher::new(), &options(&root)).unwrap();
         assert!(outcome.ok(), "{:?}", outcome.results);
-        assert_eq!(outcome.results.len(), 3);
+        assert_eq!(outcome.results.len(), 4);
 
-        // state.json records all three components at the pinned versions.
+        // state.json records all four components at the pinned versions.
         let state = State::load(&root).unwrap();
         assert_eq!(state.components["rust"].version, crate::manifest::RUST_TOOLCHAIN);
         assert_eq!(state.components["pixi"].version, crate::manifest::PIXI_VERSION);
         assert_eq!(state.components["rumoca"].version, crate::manifest::RUMOCA_VERSION);
+        assert_eq!(state.components["noema"].version, STUB_SHA);
 
         // The binaries exist where the resolver expects them.
         assert!(crate::rust::cargo_bin(&root).join("rustc").is_file());
         assert!(prefix::pixi_bin(&root).join("pixi").is_file());
         assert!(prefix::rumoca_bin(&root).join("rumoca").is_file());
+        assert!(crate::noema::noema_bin(&root).join("ui").is_file());
+        assert!(crate::noema::noema_bin(&root).join("pack").is_file());
+
+        // The sources landed where the resolver expects them.
+        assert!(crate::noema::app_dir(&root).join("Cargo.toml").is_file());
 
         // Download cache pruned after the successful run.
         assert!(!prefix::downloads(&root).exists());
@@ -284,10 +395,30 @@ exit 0
             assert!(matches!(status, Status::Skipped { .. }), "{name} should skip");
         }
 
-        // verify agrees.
-        let checked = verify(&root, false, &[]).unwrap();
-        assert!(checked.ok());
+        // verify agrees (ANY_VERSION mode without a named ref).
+        let checked = verify(&root, false, &[], None, None, &FakeToolchainFetcher::new()).unwrap();
+        assert!(checked.ok(), "{:?}", checked.results);
         let _ = target;
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn noema_stale_commit_is_rebuilt() {
+        let Some(_target) = require_host_supported() else { return };
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("toolchain");
+        run(&FakeToolchainFetcher::new(), &options(&root)).unwrap();
+
+        // Simulate an older recorded commit.
+        let mut state = State::load(&root).unwrap();
+        state.components.get_mut("noema").unwrap().version = "f".repeat(40);
+        state.save(&root).unwrap();
+
+        let outcome = run(&FakeToolchainFetcher::new(), &options(&root)).unwrap();
+        assert!(outcome.ok());
+        let noema = &outcome.results.iter().find(|(n, _)| n == "noema").unwrap().1;
+        assert!(matches!(noema, Status::Installed { .. }), "{noema:?}");
+        assert_eq!(State::load(&root).unwrap().components["noema"].version, STUB_SHA);
     }
 
     #[cfg(unix)]
@@ -307,7 +438,7 @@ exit 0
         let mut opts = options(&root);
         opts.dry_run = true;
         let outcome = run(&ExplodingFetcher, &opts).unwrap();
-        assert_eq!(outcome.results.len(), 3);
+        assert_eq!(outcome.results.len(), 4);
         assert!(!root.exists(), "dry run must not create the toolchain root");
     }
 

@@ -40,7 +40,9 @@ COPY --from=build /src/target/release/noema-setup /usr/local/bin/noema-setup
 ENV NOEMA_TOOLCHAIN_DIR=/toolchain
 VOLUME /toolchain
 
-# Default: full setup followed by verification.
+# Default: full setup (toolchain + Noema source build; 10-30 min)
+# followed by verification. For a quick toolchain-only check:
+#   docker run --rm -v noema-toolchain:/toolchain noema-setup setup --only rust,pixi,rumoca
 ENTRYPOINT ["/usr/local/bin/noema-setup"]
 CMD ["setup"]
 

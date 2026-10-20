@@ -24,11 +24,12 @@ pub struct SmapView {
 
 impl SmapView {
     pub fn new(smap_file: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        println!("smapview reports: {:?}", smap_file);
         let active_smap = match smap_file {
+            //  a smap file was passed by cli arg
             Some(smap_file) => {
                 Some(read_system_map(PathBuf::from(smap_file)).expect("unable to read system map"))
             },
+            // load from disk (Noema folder)
             None => {
 
                 let cfg = NoemaConfig::from_home().expect("unable to read config");

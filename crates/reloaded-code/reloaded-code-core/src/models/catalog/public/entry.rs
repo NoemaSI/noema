@@ -1,0 +1,110 @@
+//! Lookup result types for provider and model queries.
+//!
+//! These are the result types returned by [`ModelCatalog`] lookup methods.
+//! For builder input types, see [`ProviderSource`],
+//! [`ProviderModelSource`], [`ProviderInfo`],
+//! and [`ModelInfo`].
+//!
+//! [`ModelCatalog`]: crate::models::catalog::ModelCatalog
+//! [`ProviderSource`]: crate::models::catalog::ProviderSource
+//! [`ProviderModelSource`]: crate::models::catalog::ProviderModelSource
+//! [`ProviderInfo`]: crate::models::catalog::ProviderInfo
+//! [`ModelInfo`]: crate::models::catalog::ModelInfo
+
+use super::{Modality, ModelIdx, ProviderIdx};
+use crate::models::catalog::internal::Fixed4;
+use crate::models::ProviderType;
+use tinyvec::TinyVec;
+
+/// Number of environment variable strings stored inline (without heap
+/// allocation) in a [`ProviderEnvVars`] value.
+pub(crate) const INLINE_PROVIDER_ENV_VARS: usize = 2;
+
+/// Model lookup result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Model {
+    /// Index into model metadata/config sidecar tables.
+    pub model_config_idx: ModelIdx,
+    /// Content modalities this model can handle as input and/or output.
+    pub modalities: Modality,
+    /// Max input tokens.
+    pub max_input: u32,
+    /// Max output tokens.
+    pub max_output: u32,
+    temperature: Fixed4,
+    top_p: Fixed4,
+}
+
+/// Provider lookup result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provider<'a> {
+    /// Index into provider metadata tables.
+    pub provider_idx: ProviderIdx,
+    /// Provider base URL.
+    pub api_url: &'a str,
+    /// Candidate environment variables used to resolve API keys.
+    env_vars: ProviderEnvVars<'a>,
+    /// Type of API used by the provider.
+    pub api_type: ProviderType,
+}
+
+/// Candidate environment variables used to resolve a provider's API key.
+pub(crate) type ProviderEnvVars<'a> = TinyVec<[&'a str; INLINE_PROVIDER_ENV_VARS]>;
+
+impl Model {
+    /// Creates a new Model with the given parameters.
+    #[inline]
+    pub(crate) fn new(
+        model_config_idx: ModelIdx,
+        modalities: Modality,
+        max_input: u32,
+        max_output: u32,
+        temperature: Fixed4,
+        top_p: Fixed4,
+    ) -> Self {
+        Self {
+            model_config_idx,
+            modalities,
+            max_input,
+            max_output,
+            temperature,
+            top_p,
+        }
+    }
+
+    /// Returns temperature as an `f32`, or `None` if not specified.
+    #[inline]
+    pub fn temperature(&self) -> Option<f32> {
+        self.temperature.value()
+    }
+
+    /// Returns top_p as an `f32`, or `None` if not specified.
+    #[inline]
+    pub fn top_p(&self) -> Option<f32> {
+        self.top_p.value()
+    }
+}
+
+impl<'a> Provider<'a> {
+    /// Creates a new Provider with the given parameters.
+    #[inline]
+    pub(crate) fn new(
+        provider_idx: ProviderIdx,
+        api_url: &'a str,
+        env_vars: ProviderEnvVars<'a>,
+        api_type: ProviderType,
+    ) -> Self {
+        Self {
+            provider_idx,
+            api_url,
+            env_vars,
+            api_type,
+        }
+    }
+
+    /// Returns the candidate environment variables used to resolve API keys.
+    #[inline]
+    pub fn env_vars(&self) -> &[&'a str] {
+        self.env_vars.as_slice()
+    }
+}

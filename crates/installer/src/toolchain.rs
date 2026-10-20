@@ -81,6 +81,16 @@ impl Toolchain {
         self.resolve("rustup", &crate::rust::cargo_bin(&self.root), "rustup")
     }
 
+    /// The built `ui` binary from the managed noema install.
+    pub fn ui(&self) -> Result<PathBuf, ToolchainError> {
+        self.resolve("ui", &crate::noema::noema_bin(&self.root), "ui")
+    }
+
+    /// The built `pack` binary from the managed noema install.
+    pub fn pack(&self) -> Result<PathBuf, ToolchainError> {
+        self.resolve("pack", &crate::noema::noema_bin(&self.root), "pack")
+    }
+
     /// Environment overlay for spawning any managed executable:
     /// prepends the managed bin directories to `PATH` and sets
     /// `RUSTUP_HOME`/`CARGO_HOME` so the rustup shims resolve the
@@ -90,6 +100,7 @@ impl Toolchain {
             crate::rust::cargo_bin(&self.root),
             prefix::pixi_bin(&self.root),
             prefix::rumoca_bin(&self.root),
+            crate::noema::noema_bin(&self.root),
         ];
         let mut path = OsString::new();
         for (i, dir) in managed_bins.iter().enumerate() {

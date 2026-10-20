@@ -14,3 +14,4 @@ packs/**
 
 # Standalone installer workspace build artifacts
 crates/installer/target/
+crates/reloaded-code/target/

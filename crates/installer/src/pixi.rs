@@ -18,8 +18,8 @@ impl component::Component for PixiComponent {
         "pixi"
     }
 
-    fn pinned_version(&self) -> &'static str {
-        PIXI_VERSION
+    fn pinned_version(&self) -> String {
+        PIXI_VERSION.to_string()
     }
 
     fn probe(&self, root: &Path) -> Option<String> {

@@ -45,8 +45,8 @@ impl super::component::Component for RustupComponent {
         "rust"
     }
 
-    fn pinned_version(&self) -> &'static str {
-        RUST_TOOLCHAIN
+    fn pinned_version(&self) -> String {
+        RUST_TOOLCHAIN.to_string()
     }
 
     fn probe(&self, root: &Path) -> Option<String> {

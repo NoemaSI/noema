@@ -1,0 +1,425 @@
+//! Mock model types with streaming support for running agents without a real LLM provider.
+//!
+//! Wraps upstream [`serdes_ai_models`] mock types so they work with
+//! [`Agent::run_stream`][`serdes_ai::Agent::run_stream`].
+//!
+//! # Quick start
+//!
+//! ```text
+//! use reloaded_code_serdesai::mock::{Streamed, tool_then_text};
+//! use serde_json::json;
+//!
+//! let model = tool_then_text("glob", json!({"pattern": "*.rs"}), "Done.");
+//! let stream = agent.run_stream("prompt", ()).await?; // OK
+//! ```
+//!
+//! When using [`crate::AgentBuildContext`], call
+//! [`with_model_override`]
+//! to inject the mock model before calling [`build()`].
+//!
+//! [`with_model_override`]: crate::AgentBuildContext::with_model_override
+//! [`build()`]: crate::AgentBuildContext::build
+
+// Re-export upstream mock types so users can still access the raw variants when needed.
+use async_trait::async_trait;
+use futures::stream;
+use serdes_ai::core::{
+    FinishReason, ModelRequest, ModelResponse, ModelResponsePart, ModelResponseStreamEvent,
+    ToolCallPart,
+};
+use serdes_ai_models::Model as ModelTrait;
+pub use serdes_ai_models::{FunctionModel, MockModel, TestModel};
+// Re-export the types from where serdes-ai-models exposes them.
+use serdes_ai::core::ModelSettings;
+use serdes_ai_models::{
+    ModelCapability, ModelError, ModelProfile, ModelRequestParameters, StreamedResponse,
+};
+
+// ============================================================================
+// Private helpers
+// ============================================================================
+
+/// Characters per streamed text chunk; see [`response_to_stream_events`].
+const STREAM_CHUNK_CHARS: usize = 16;
+
+// ============================================================================
+// Streamed - wrapper that adds streaming support to any Model
+// ============================================================================
+
+/// Wrapper adding [`request_stream`] support to any [`ModelTrait`] implementation.
+///
+/// Delegates [`request`] directly to the inner model and converts the non-streaming
+/// response into a sequence of [`ModelResponseStreamEvent`]s for streaming callers.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use reloaded_code_serdesai::mock::{FunctionModel, Streamed};
+/// use serde_json::json;
+///
+/// let model = Streamed::new(FunctionModel::tool_call("glob", json!({"pattern": "*.rs"})));
+/// ```
+///
+/// [`request_stream`]: ModelTrait::request_stream
+/// [`request`]: ModelTrait::request
+#[derive(Clone, Debug)]
+pub struct Streamed<T> {
+    inner: T,
+    name: String,
+}
+
+impl<T> Streamed<T> {
+    /// Wrap a model to add streaming support.
+    ///
+    /// The `name` defaults to the inner model's [`name()`].
+    ///
+    /// [`name()`]: ModelTrait::name
+    pub fn new(inner: T) -> Self
+    where
+        T: ModelTrait,
+    {
+        let name = inner.name().to_string();
+        Self { inner, name }
+    }
+
+    /// Set a custom name for the wrapped model.
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
+}
+
+#[async_trait]
+impl<T: ModelTrait + Send + Sync> ModelTrait for Streamed<T> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn system(&self) -> &str {
+        self.inner.system()
+    }
+
+    fn profile(&self) -> &ModelProfile {
+        self.inner.profile()
+    }
+
+    async fn request(
+        &self,
+        messages: &[ModelRequest],
+        settings: &ModelSettings,
+        params: &ModelRequestParameters,
+    ) -> Result<ModelResponse, ModelError> {
+        self.inner.request(messages, settings, params).await
+    }
+
+    async fn request_stream(
+        &self,
+        messages: &[ModelRequest],
+        settings: &ModelSettings,
+        params: &ModelRequestParameters,
+    ) -> Result<StreamedResponse, ModelError> {
+        let response = self.inner.request(messages, settings, params).await?;
+        let events = response_to_stream_events(response);
+        Ok(Box::pin(stream::iter(events.into_iter().map(Ok))))
+    }
+
+    fn supports(&self, capability: ModelCapability) -> bool {
+        self.inner.supports(capability)
+    }
+}
+
+// ============================================================================
+// Convenience helpers
+// ============================================================================
+
+/// Build a mock model that calls `tool_name` with `args` on the **first** turn,
+/// then returns text that incorporates the real tool return on the **second** turn.
+///
+/// This prevents infinite loops when running agent examples that stream,
+/// because after the tool result is fed back the model answers with text.
+///
+/// The second-turn response includes whatever the real tool returned, so
+/// the output reflects actual tool execution rather than a canned message.
+///
+/// # Arguments
+///
+/// - `tool_name` - name of the tool to call on the first turn.
+/// - `args` - JSON arguments passed to the tool call on the first turn.
+/// - `fallback_text` - text prefix for the second-turn response; the real tool
+///   return is appended after it.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use reloaded_code_serdesai::mock::tool_then_text;
+/// use serde_json::json;
+///
+/// let model = tool_then_text("glob", json!({"pattern": "*.rs"}), "Done.");
+/// ```
+pub fn tool_then_text(
+    tool_name: impl Into<String>,
+    args: serde_json::Value,
+    fallback_text: impl Into<String>,
+) -> Streamed<FunctionModel> {
+    let tool_name = tool_name.into();
+    let fallback_text = fallback_text.into();
+
+    let model = FunctionModel::new(move |messages, _settings| {
+        // Check whether the conversation already contains a tool return from a
+        // previous turn.  If it does, we are on the second call and should
+        // produce a text response incorporating the real result.
+        let has_tool_return = messages.iter().any(|m| {
+            m.parts
+                .iter()
+                .any(|p| matches!(p, serdes_ai::core::ModelRequestPart::ToolReturn(_)))
+        });
+
+        if has_tool_return {
+            // Collect tool return content from the message history.
+            let tool_results: String = messages
+                .iter()
+                .flat_map(|m| m.tool_returns())
+                .map(extract_tool_return_text)
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let text = if tool_results.is_empty() {
+                fallback_text.clone()
+            } else {
+                format!("{fallback_text}\n\n{tool_results}")
+            };
+
+            ModelResponse::text(text)
+        } else {
+            // First call: emit a tool call so the agent executes the real tool.
+            tool_call_response(&tool_name, &args, 0)
+        }
+    });
+
+    Streamed::new(model)
+}
+
+/// Scripts two tool calls followed by a text answer, generalising
+/// [`tool_then_text`] to two-step flows: the first turn calls `first`, the
+/// next turn calls `second`, and once both tool returns are in the
+/// conversation the model answers with `final_text` followed by the real
+/// tool returns, so callers can observe what the model received.
+///
+/// # Arguments
+///
+/// - `first` - name and JSON arguments of the tool called on the first turn.
+/// - `second` - name and JSON arguments of the tool called on the second turn.
+/// - `final_text` - text prefix for the closing response; the real tool
+///   returns are appended after it.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use reloaded_code_serdesai::mock::two_tools_then_text;
+/// use serde_json::json;
+///
+/// let model = two_tools_then_text(
+///     ("read", json!({"file_path": "service.env"})),
+///     ("write", json!({"file_path": "draft.md", "content": "notes"})),
+///     "Run finished.",
+/// );
+/// ```
+pub fn two_tools_then_text(
+    first: (impl Into<String>, serde_json::Value),
+    second: (impl Into<String>, serde_json::Value),
+    final_text: impl Into<String>,
+) -> Streamed<FunctionModel> {
+    let first_name = first.0.into();
+    let first_args = first.1;
+    let second_name = second.0.into();
+    let second_args = second.1;
+    let final_text = final_text.into();
+
+    let model = FunctionModel::new(move |messages, _settings| {
+        // Each finished tool call adds one tool return to the history, so
+        // their count tells which scripted turn is next.
+        let answered_calls = messages.iter().flat_map(|m| m.tool_returns()).count();
+
+        match answered_calls {
+            0 => tool_call_response(&first_name, &first_args, 0),
+            1 => tool_call_response(&second_name, &second_args, 1),
+            _ => {
+                let tool_results: String = messages
+                    .iter()
+                    .flat_map(|m| m.tool_returns())
+                    .map(extract_tool_return_text)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let text = if tool_results.is_empty() {
+                    final_text.clone()
+                } else {
+                    format!("{final_text}\n\n{tool_results}")
+                };
+                ModelResponse::text(text)
+            }
+        }
+    });
+
+    Streamed::new(model)
+}
+
+/// Extract human-readable text from a [`ToolReturnPart`].
+///
+/// Uses serde JSON round-tripping to avoid depending on the
+/// non-public `ToolReturnContent` enum variants directly.
+fn extract_tool_return_text(tr: &serdes_ai::core::ToolReturnPart) -> String {
+    // Serialize the content field to JSON, then extract readable text.
+    // ToolReturnContent variants produce:
+    //   Text    -> {"type":"text","content":"..."}
+    //   Json    -> {"type":"json","content":{...}}
+    //   Error   -> {"type":"error","message":"..."}
+    //   Multiple-> {"type":"multiple","items":[...]}
+    //   Image   -> {"type":"image","image":{...}}
+    let Ok(val) = serde_json::to_value(&tr.content) else {
+        return format!("{:?}", tr.content);
+    };
+
+    // Try text content field first (most common case).
+    if let Some(text) = val.get("content").and_then(|v| v.as_str()) {
+        return text.to_string();
+    }
+
+    // JSON content field.
+    if let Some(json_val) = val.get("content")
+        && let Ok(pretty) = serde_json::to_string_pretty(json_val)
+    {
+        return pretty;
+    }
+
+    // Error message field.
+    if let Some(msg) = val.get("message").and_then(|v| v.as_str()) {
+        return format!("[error] {msg}");
+    }
+
+    // Fallback: pretty-print the whole thing.
+    serde_json::to_string_pretty(&val).unwrap_or_else(|_| format!("{:?}", tr.content))
+}
+
+fn response_to_stream_events(response: ModelResponse) -> Vec<ModelResponseStreamEvent> {
+    // Estimate: two boundary events per part plus one delta per chunk
+    // (byte length bounds the char-chunk count from above).
+    let estimated: usize = response
+        .parts
+        .iter()
+        .map(|part| match part {
+            ModelResponsePart::Text(text) => text.content.len() / STREAM_CHUNK_CHARS + 3,
+            _ => 3,
+        })
+        .sum();
+    let mut events = Vec::with_capacity(estimated);
+
+    for (index, part) in response.parts.into_iter().enumerate() {
+        match part {
+            // Text streams incrementally: an empty start, then bounded
+            // chunks, so the agent layer surfaces multiple text deltas
+            // instead of one whole-part event.
+            ModelResponsePart::Text(text) => {
+                events.push(ModelResponseStreamEvent::part_start(
+                    index,
+                    ModelResponsePart::text(""),
+                ));
+                push_text_delta_events(&mut events, index, &text.content);
+                events.push(ModelResponseStreamEvent::part_end(index));
+            }
+            part => {
+                events.push(ModelResponseStreamEvent::part_start(index, part));
+                events.push(ModelResponseStreamEvent::part_end(index));
+            }
+        }
+    }
+
+    events
+}
+
+/// Emits a tool-call response: a short text part, then the call that
+/// triggers the real tool.
+///
+/// The call id is `call_mock_{turn + 1}`, where `turn` is the 0-based
+/// scripted turn number, so each scripted call correlates separately in
+/// streamed events and transcripts.
+fn tool_call_response(tool_name: &str, args: &serde_json::Value, turn: usize) -> ModelResponse {
+    ModelResponse::with_parts(vec![
+        ModelResponsePart::text(format!("Calling {tool_name}...")),
+        ModelResponsePart::ToolCall(
+            ToolCallPart::new(tool_name, args.clone())
+                .with_tool_call_id(format!("call_mock_{}", turn + 1)),
+        ),
+    ])
+    .with_finish_reason(FinishReason::ToolCall)
+}
+
+/// Pushes one `text_delta` event per [`STREAM_CHUNK_CHARS`] character chunk
+/// of `text`, chunking on char boundaries so multi-byte text stays intact.
+fn push_text_delta_events(events: &mut Vec<ModelResponseStreamEvent>, index: usize, text: &str) {
+    let mut remaining = text;
+    while !remaining.is_empty() {
+        let end = remaining
+            .char_indices()
+            .nth(STREAM_CHUNK_CHARS)
+            .map_or(remaining.len(), |(offset, _)| offset);
+        events.push(ModelResponseStreamEvent::text_delta(
+            index,
+            &remaining[..end],
+        ));
+        remaining = &remaining[end..];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use serdes_ai::core::{ModelRequestPart, ToolReturnPart};
+
+    /// Id stamped on the first tool call in `response`, if it has one.
+    fn scripted_call_id(response: &ModelResponse) -> Option<&str> {
+        response.parts.iter().find_map(|part| match part {
+            ModelResponsePart::ToolCall(call) => call.tool_call_id.as_deref(),
+            _ => None,
+        })
+    }
+
+    /// Each scripted turn stamps its own call id, so two-call flows keep
+    /// distinct correlation keys in streamed events and transcripts.
+    #[tokio::test]
+    async fn two_tools_then_text_assigns_distinct_call_ids_per_turn() {
+        let model = two_tools_then_text(
+            ("read", json!({"file_path": "a.txt"})),
+            ("write", json!({"file_path": "b.txt", "content": "notes"})),
+            "Run finished.",
+        );
+
+        // No answered calls in an empty history: the first turn runs.
+        let first = model
+            .request(
+                &[],
+                &ModelSettings::default(),
+                &ModelRequestParameters::default(),
+            )
+            .await
+            .expect("first scripted turn should respond");
+
+        // One answered call in the history advances the script.
+        let history = vec![ModelRequest::with_parts(vec![
+            ModelRequestPart::ToolReturn(
+                ToolReturnPart::success("read", "fixture").with_tool_call_id("call_mock_1"),
+            ),
+        ])];
+        let second = model
+            .request(
+                &history,
+                &ModelSettings::default(),
+                &ModelRequestParameters::default(),
+            )
+            .await
+            .expect("second scripted turn should respond");
+
+        assert_eq!(scripted_call_id(&first), Some("call_mock_1"));
+        assert_eq!(scripted_call_id(&second), Some("call_mock_2"));
+    }
+}

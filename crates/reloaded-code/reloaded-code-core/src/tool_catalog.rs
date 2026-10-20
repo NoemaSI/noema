@@ -1,0 +1,111 @@
+//! Tool catalog entries shared across runtimes and framework adapters.
+//!
+//! Each [`ToolCatalogEntry`] pairs a model-facing tool name with its
+//! [`ToolCatalogKind`]. The catalog describes what can be materialized; adapter
+//! crates decide how each kind is built for their framework.
+
+use crate::tool_metadata::{
+    bash as bash_meta, edit as edit_meta, glob as glob_meta, grep as grep_meta, read as read_meta,
+    task as task_meta, todo_read as todo_read_meta, todo_write as todo_write_meta,
+    webfetch as webfetch_meta, write as write_meta,
+};
+
+const DEFAULT_TOOLS: [ToolCatalogEntry; 10] = [
+    ToolCatalogEntry::new(read_meta::NAME, ToolCatalogKind::Read),
+    ToolCatalogEntry::new(write_meta::NAME, ToolCatalogKind::Write),
+    ToolCatalogEntry::new(edit_meta::NAME, ToolCatalogKind::Edit),
+    ToolCatalogEntry::new(glob_meta::NAME, ToolCatalogKind::Glob),
+    ToolCatalogEntry::new(grep_meta::NAME, ToolCatalogKind::Grep),
+    ToolCatalogEntry::new(bash_meta::NAME, ToolCatalogKind::Bash),
+    ToolCatalogEntry::new(webfetch_meta::NAME, ToolCatalogKind::WebFetch),
+    ToolCatalogEntry::new(todo_read_meta::NAME, ToolCatalogKind::TodoRead),
+    ToolCatalogEntry::new(todo_write_meta::NAME, ToolCatalogKind::TodoWrite),
+    ToolCatalogEntry::new(task_meta::NAME, ToolCatalogKind::Task),
+];
+
+/// One tool an integration can provide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolCatalogEntry {
+    /// Tool name exposed to models.
+    pub name: &'static str,
+    /// Which tool this is.
+    pub kind: ToolCatalogKind,
+}
+
+/// Standard and custom tool kinds understood by reloaded-code adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ToolCatalogKind {
+    /// Read file contents.
+    Read,
+    /// Write file contents.
+    Write,
+    /// Edit file contents.
+    Edit,
+    /// Glob file pattern matching.
+    Glob,
+    /// Grep text search.
+    Grep,
+    /// Bash command execution.
+    Bash,
+    /// Web fetch for HTTP requests.
+    WebFetch,
+    /// Read todo items.
+    TodoRead,
+    /// Create and update todo items.
+    TodoWrite,
+    /// Delegate to another runtime target via Task.
+    Task,
+    /// User-defined custom tool.
+    Custom,
+}
+
+impl ToolCatalogEntry {
+    /// Creates a tool entry from its name and kind.
+    #[must_use]
+    pub const fn new(name: &'static str, kind: ToolCatalogKind) -> Self {
+        Self { name, kind }
+    }
+}
+
+/// Returns the standard tool set.
+#[must_use]
+pub fn default_tools() -> Vec<ToolCatalogEntry> {
+    DEFAULT_TOOLS.to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{default_tools, ToolCatalogEntry, ToolCatalogKind};
+    use crate::tool_metadata::{
+        bash as bash_meta, edit as edit_meta, glob as glob_meta, grep as grep_meta,
+        read as read_meta, task as task_meta, todo_read as todo_read_meta,
+        todo_write as todo_write_meta, webfetch as webfetch_meta, write as write_meta,
+    };
+
+    #[test]
+    fn default_tools_match_expected_catalog() {
+        assert_eq!(
+            default_tools(),
+            vec![
+                ToolCatalogEntry::new(read_meta::NAME, ToolCatalogKind::Read),
+                ToolCatalogEntry::new(write_meta::NAME, ToolCatalogKind::Write),
+                ToolCatalogEntry::new(edit_meta::NAME, ToolCatalogKind::Edit),
+                ToolCatalogEntry::new(glob_meta::NAME, ToolCatalogKind::Glob),
+                ToolCatalogEntry::new(grep_meta::NAME, ToolCatalogKind::Grep),
+                ToolCatalogEntry::new(bash_meta::NAME, ToolCatalogKind::Bash),
+                ToolCatalogEntry::new(webfetch_meta::NAME, ToolCatalogKind::WebFetch,),
+                ToolCatalogEntry::new(todo_read_meta::NAME, ToolCatalogKind::TodoRead,),
+                ToolCatalogEntry::new(todo_write_meta::NAME, ToolCatalogKind::TodoWrite,),
+                ToolCatalogEntry::new(task_meta::NAME, ToolCatalogKind::Task),
+            ],
+        );
+    }
+
+    #[test]
+    fn custom_variant_creates_catalog_entry() {
+        let entry = ToolCatalogEntry::new("web_search", ToolCatalogKind::Custom);
+        assert_eq!(entry.name, "web_search");
+        assert_eq!(entry.kind, ToolCatalogKind::Custom);
+    }
+}

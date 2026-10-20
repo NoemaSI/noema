@@ -48,9 +48,15 @@ const MAX_DOWNLOAD_BYTES: u64 = 128 * 1024 * 1024;
 
 impl Fetcher for HttpFetcher {
     fn fetch(&self, url: &str) -> anyhow::Result<Vec<u8>> {
-        let mut response = ureq::get(url)
+        let mut builder = ureq::get(url);
+        // Optional token for private repos / API rate limits — sent to
+        // GitHub hosts only, never to third-party mirrors.
+        if let Some(auth) = github_authorization(url) {
+            builder = builder.header("Authorization", auth);
+        }
+        let mut response = builder
             .config()
-            .timeout_global(Some(std::time::Duration::from_secs(600)))
+            .timeout_global(Some(std::time::Duration::from_secs(NOEMA_BUILD_TIMEOUT_SECS)))
             .build()
             .call()
             .with_context(|| format!("GET {url}"))?;
@@ -62,6 +68,21 @@ impl Fetcher for HttpFetcher {
             .with_context(|| format!("reading body of {url}"))?;
         Ok(bytes)
     }
+}
+
+/// Longer timeout for the big source-zip / build-fetch downloads.
+const NOEMA_BUILD_TIMEOUT_SECS: u64 = 600;
+
+fn github_authorization(url: &str) -> Option<String> {
+    let is_github = ["github.com", "codeload.github.com", "api.github.com"]
+        .iter()
+        .any(|host| url.starts_with(&format!("https://{host}/")));
+    if !is_github {
+        return None;
+    }
+    let token = std::env::var("NOEMA_SETUP_TOKEN").ok()?;
+    let token = token.trim().to_string();
+    (!token.is_empty()).then(|| format!("Bearer {token}"))
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -167,10 +188,128 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Fetch a dynamic URL (e.g. a source archive for a mutable ref) into
+/// the cache, keyed by the URL itself. Content is not manifest-pinned;
+/// the caller records the observed digest in `state.json` instead.
+pub fn fetch_dynamic(fetcher: &dyn Fetcher, url: &str, downloads: &Path) -> anyhow::Result<Vec<u8>> {
+    std::fs::create_dir_all(downloads)
+        .with_context(|| format!("creating download cache {}", downloads.display()))?;
+    let key = sha256_hex(url.as_bytes());
+    let cached = downloads.join(format!("src-{}", &key[..16]));
+    if let Ok(existing) = std::fs::read(&cached) {
+        return Ok(existing);
+    }
+    let bytes = fetcher.fetch(url)?;
+    write_atomic(&cached, &bytes).with_context(|| format!("caching {}", cached.display()))?;
+    Ok(bytes)
+}
+
+/// Extract a zip archive into `destination`, replacing any previous
+/// extraction. When `strip_root` is set, the archive's single
+/// top-level directory (GitHub source archives always have one) is
+/// removed. Entries escaping the destination are rejected.
+pub fn extract_zip(bytes: &[u8], destination: &Path, strip_root: bool) -> anyhow::Result<()> {
+    let staging = destination.with_extension("extracting");
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging)
+        .with_context(|| format!("creating {}", staging.display()))?;
+
+    let reader = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader).context("reading zip archive")?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).context("reading zip entry")?;
+        // enclosed_name() sanitises traversal and absolute paths.
+        let Some(raw) = entry.enclosed_name() else {
+            anyhow::bail!("refusing unsafe zip entry {:?}", entry.name());
+        };
+        let relative = if strip_root {
+            raw.components().skip(1).collect::<PathBuf>()
+        } else {
+            raw
+        };
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        let target = staging.join(&relative);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target)?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut file = std::fs::File::create(&target)
+            .with_context(|| format!("creating {}", target.display()))?;
+        std::io::copy(&mut entry, &mut file)?;
+        drop(file);
+        #[cfg(unix)]
+        if let Some(mode) = entry.unix_mode() {
+            use std::os::unix::fs::PermissionsExt;
+            // GitHub archives record symlinks as regular files; mode
+            // 0 gives a normal readable file, execute bits are kept.
+            let mode = mode & 0o7777;
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(mode))?;
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(destination);
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::rename(&staging, destination)
+        .with_context(|| format!("moving {} to {}", staging.display(), destination.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    fn build_zip(top: &str, files: &[(&str, &str)]) -> Vec<u8> {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = SimpleFileOptions::default();
+        for (path, content) in files {
+            writer.start_file(format!("{top}/{path}"), options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn extract_zip_strips_root_and_writes_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = build_zip("repo-main", &[("Cargo.toml", "[package]\n"), ("src/lib.rs", "// hi\n")]);
+        let dest = dir.path().join("out");
+
+        extract_zip(&zip, &dest, true).unwrap();
+        assert_eq!(std::fs::read_to_string(dest.join("Cargo.toml")).unwrap(), "[package]\n");
+        assert_eq!(std::fs::read_to_string(dest.join("src/lib.rs")).unwrap(), "// hi\n");
+        assert!(!dest.join("repo-main").exists());
+    }
+
+    #[test]
+    fn extract_zip_replaces_previous_extraction() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("old.txt"), b"stale").unwrap();
+
+        extract_zip(&build_zip("r", &[("new.txt", "fresh")]), &dest, true).unwrap();
+        assert_eq!(std::fs::read_to_string(dest.join("new.txt")).unwrap(), "fresh");
+        assert!(!dest.join("old.txt").exists());
+    }
+
+    #[test]
+    fn extract_zip_rejects_traversal_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        // "r/../../escape.txt" escapes the archive root even after the
+        // top-level directory is accounted for.
+        let zip = build_zip("r", &[("../../escape.txt", "nope")]);
+        let error = extract_zip(&zip, &dir.path().join("out"), true).unwrap_err();
+        assert!(error.to_string().contains("unsafe zip entry"), "{error}");
+    }
 
     pub struct StubFetcher {
         pub body: Vec<u8>,

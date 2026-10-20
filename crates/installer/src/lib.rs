@@ -16,6 +16,7 @@ pub mod component;
 pub mod detect;
 pub mod download;
 pub mod manifest;
+pub mod noema;
 pub mod pixi;
 pub mod prefix;
 pub mod prereqs;

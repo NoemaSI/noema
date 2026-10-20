@@ -16,8 +16,8 @@ use anyhow::{Result, bail};
 use installer::{download, prefix, setup};
 
 fn usage() -> &'static str {
-    "usage: noema-setup [setup|verify|uninstall] [--prefix DIR] [--only rust,pixi,rumoca]\n\
-     \x20                [--dry-run] [--json] [--yes]\n"
+    "usage: noema-setup [setup|verify|uninstall] [--prefix DIR] [--only rust,pixi,rumoca,noema]\n\
+     \x20                [--ref <branch|tag|sha>] [--repo owner/name] [--dry-run] [--json] [--yes]\n"
 }
 
 struct Args {
@@ -27,6 +27,8 @@ struct Args {
     dry_run: bool,
     json: bool,
     yes: bool,
+    noema_ref: Option<String>,
+    noema_repo: Option<String>,
 }
 
 fn parse_args(argv: &[String]) -> Result<Args> {
@@ -37,6 +39,8 @@ fn parse_args(argv: &[String]) -> Result<Args> {
         dry_run: false,
         json: false,
         yes: false,
+        noema_ref: None,
+        noema_repo: None,
     };
     let mut argv = argv.iter().peekable();
     if let Some(first) = argv.peek() {
@@ -54,6 +58,12 @@ fn parse_args(argv: &[String]) -> Result<Args> {
             "--only" => {
                 let value = argv.next().ok_or_else(|| anyhow::anyhow!("--only needs a value"))?;
                 args.only = value.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
+            }
+            "--ref" => {
+                args.noema_ref = Some(argv.next().cloned().ok_or_else(|| anyhow::anyhow!("--ref needs a value"))?);
+            }
+            "--repo" => {
+                args.noema_repo = Some(argv.next().cloned().ok_or_else(|| anyhow::anyhow!("--repo needs a value"))?);
             }
             "--dry-run" => args.dry_run = true,
             "--json" => args.json = true,
@@ -88,7 +98,14 @@ fn run(argv: &[String]) -> Result<bool> {
 
     match args.command.as_str() {
         "verify" => {
-            let outcome = setup::verify(&root, args.json, &args.only)?;
+            let outcome = setup::verify(
+                &root,
+                args.json,
+                &args.only,
+                args.noema_ref,
+                args.noema_repo,
+                &download::HttpFetcher,
+            )?;
             print_summary(&outcome);
             Ok(outcome.ok())
         }
@@ -114,6 +131,8 @@ fn run(argv: &[String]) -> Result<bool> {
                 dry_run: args.dry_run,
                 json: args.json,
                 verification: download::Verification::Enforce,
+                noema_ref: args.noema_ref,
+                noema_repo: args.noema_repo,
             };
             let outcome = setup::run(&download::HttpFetcher, &options)?;
             print_summary(&outcome);
@@ -164,6 +183,14 @@ mod tests {
         assert_eq!(parsed.prefix.unwrap(), std::path::Path::new("/tmp/t"));
         assert_eq!(parsed.only, ["pixi", "rumoca"]);
         assert!(parsed.json);
+    }
+
+    #[test]
+    fn parses_noema_source_flags() {
+        let parsed = parse_args(&args("setup --ref v1.2.0 --repo Some/Repo")).unwrap();
+        assert_eq!(parsed.noema_ref.as_deref(), Some("v1.2.0"));
+        assert_eq!(parsed.noema_repo.as_deref(), Some("Some/Repo"));
+        assert!(parse_args(&args("setup --ref")).is_err());
     }
 
     #[test]

@@ -1,0 +1,85 @@
+site_name: ReloadedCode
+site_url: https://reloaded-project.github.io/ReloadedCode
+docs_dir: src
+
+repo_name: Reloaded-Project/ReloadedCode
+repo_url: https://github.com/Reloaded-Project/ReloadedCode
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Reloaded-Project/ReloadedCode
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/67rU5jhgDt
+
+extra_css:
+  - vendor/Reloaded/Stylesheets/reloaded.css
+  - assets/landing.css
+
+markdown_extensions:
+  - admonition
+  - tables
+  - abbr
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tasklist
+  - def_list
+  - meta
+  - md_in_html
+  - attr_list
+  - footnotes
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.blocks.caption
+
+theme:
+  name: material
+  palette:
+    scheme: reloaded3-slate
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - content.tooltips
+    - content.code.copy
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+      cache_safe: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Tools: tools.md
+  - Agents: agents.md
+  - Hooks: hooks.md
+  - Examples: examples.md
+  - Sandboxing: sandboxing.md
+  - Feature Flags: feature-flags.md
+  - Architecture:
+      - Crate Structure: architecture.md
+      - Models Catalog: models-catalog.md
+  - vs. OpenCode:
+      - Comparison: comparison.md
+      - Migration: migration.md
+  - Guides:
+      - Custom Framework Integration: guides/custom-framework.md
+      - Custom Providers: guides/custom-providers.md
+  - Extra:
+      - Extra Sandboxing Notes: extra-sandboxing-notes.md

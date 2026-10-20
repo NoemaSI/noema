@@ -19,8 +19,8 @@ impl component::Component for RumocaComponent {
         "rumoca"
     }
 
-    fn pinned_version(&self) -> &'static str {
-        RUMOCA_VERSION
+    fn pinned_version(&self) -> String {
+        RUMOCA_VERSION.to_string()
     }
 
     fn probe(&self, root: &Path) -> Option<String> {

@@ -43,8 +43,9 @@ impl Ctx<'_> {
 pub trait Component {
     fn name(&self) -> &'static str;
 
-    /// The version the manifest pins.
-    fn pinned_version(&self) -> &'static str;
+    /// The version the installer targets. For the source-built noema
+    /// component this is a resolved commit sha, not a static pin.
+    fn pinned_version(&self) -> String;
 
     /// Installed version inside `root`, if the managed binary exists
     /// and reports a parseable version.
@@ -141,8 +142,8 @@ mod tests {
         fn name(&self) -> &'static str {
             "fake"
         }
-        fn pinned_version(&self) -> &'static str {
-            "9.9.9"
+        fn pinned_version(&self) -> String {
+            "9.9.9".to_string()
         }
         fn probe(&self, _root: &Path) -> Option<String> {
             self.installed.clone()

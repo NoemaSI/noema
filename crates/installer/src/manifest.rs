@@ -27,6 +27,31 @@ pub const PIXI_VERSION: &str = "0.82.0";
 /// release; we install the prebuilt binaries from the GitHub release.
 pub const RUMOCA_VERSION: &str = "0.9.20";
 
+// ---------------------------------------------------------------------------
+// Noema itself: built from source inside the managed directory.
+// ---------------------------------------------------------------------------
+
+/// GitHub repository (`owner/name`) of the Noema app workspace.
+pub const NOEMA_REPO: &str = "NoemaSI/noema";
+
+/// Source ref built when the user does not pass `--ref`: a branch is
+/// resolved to its exact commit through the GitHub API, so a setup run
+/// is still reproducible.
+pub const NOEMA_DEFAULT_REF: &str = "main";
+
+/// Workspace packages the installer builds from source.
+pub const NOEMA_BUILD_PACKAGES: [&str; 2] = ["ui", "pack"];
+
+/// Source archive URL for a repo at an exact ref (branch, tag or sha).
+pub fn source_zip_url(repo: &str, ref_name: &str) -> String {
+    format!("https://github.com/{repo}/archive/{ref_name}.zip")
+}
+
+/// GitHub API endpoint resolving any ref (branch/tag/sha) to a commit.
+pub fn commit_api_url(repo: &str, ref_name: &str) -> String {
+    format!("https://api.github.com/repos/{repo}/commits/{ref_name}")
+}
+
 /// One downloadable, checksum-pinned binary asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Asset {
@@ -59,8 +84,6 @@ impl Asset {
 const RUSTUP_BASE: &str = "https://static.rust-lang.org/rustup/dist";
 #[cfg(test)]
 const PIXI_BASE: &str = "https://github.com/prefix-dev/pixi/releases/download";
-#[cfg(test)]
-const RUMOCA_BASE: &str = "https://github.com/CogniPilot/rumoca/releases/download";
 
 /// rustup-init for the given host triple (Windows adds `.exe`).
 pub fn rustup_init(target: &Target) -> Option<Asset> {

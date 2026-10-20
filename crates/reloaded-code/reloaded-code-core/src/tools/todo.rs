@@ -1,0 +1,273 @@
+//! Todo list management operation.
+
+use crate::error::{ToolError, ToolResult};
+use parking_lot::RwLock;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::fmt::Write;
+use std::sync::Arc;
+
+/// Serde-friendly request for reading the task list, owned by the core crate.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TodoReadRequest {}
+
+/// Thread-safe shared state holding the tracked task list.
+#[derive(Debug, Clone, Default)]
+pub struct TodoState {
+    todos: Arc<RwLock<Vec<Todo>>>,
+}
+
+/// Serde-friendly request for replacing the task list, owned by the core crate.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TodoWriteRequest {
+    /// The complete list of todos to set.
+    pub todos: Vec<Todo>,
+}
+
+/// A single task item.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct Todo {
+    /// Unique identifier for the task.
+    pub id: String,
+    /// Task description.
+    pub content: String,
+    /// Current status.
+    pub status: TodoStatus,
+    /// Priority level.
+    pub priority: TodoPriority,
+}
+
+/// Task priority level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoPriority {
+    /// Urgent, should be addressed first.
+    High,
+    /// Normal priority.
+    Medium,
+    /// Can be deferred.
+    Low,
+}
+
+/// Task status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoStatus {
+    /// Not yet started.
+    Pending,
+    /// Currently being worked on.
+    InProgress,
+    /// Successfully finished.
+    Completed,
+    /// Abandoned or no longer relevant.
+    Cancelled,
+}
+
+impl TodoReadRequest {
+    /// Parses a raw JSON tool payload into a todo-read request.
+    ///
+    /// # Errors
+    /// - Returns [`ToolError::Json`] when the JSON payload cannot be deserialized
+    ///   into a [`TodoReadRequest`].
+    pub fn parse(args: Value) -> ToolResult<Self> {
+        serde_json::from_value(args).map_err(ToolError::from)
+    }
+}
+
+impl TodoState {
+    /// Creates a new empty todo state.
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl TodoWriteRequest {
+    /// Parses a raw JSON tool payload into a todo-write request.
+    ///
+    /// # Errors
+    /// - Returns [`ToolError::Json`] when the JSON payload cannot be deserialized
+    ///   into a [`TodoWriteRequest`] (e.g., missing `todos` field or invalid todo
+    ///   structure).
+    pub fn parse(args: Value) -> ToolResult<Self> {
+        serde_json::from_value(args).map_err(ToolError::from)
+    }
+}
+
+impl TodoStatus {
+    /// Returns the status indicator icon.
+    #[inline]
+    pub const fn icon(self) -> &'static str {
+        match self {
+            Self::Pending => "[ ]",
+            Self::InProgress => "[>]",
+            Self::Completed => "[x]",
+            Self::Cancelled => "[-]",
+        }
+    }
+}
+
+/// Reads and formats the current list of tracked tasks.
+///
+/// # Arguments
+/// - `state`: Shared state holding the task list to read.
+/// - `_request`: Placeholder request required by the tool dispatch signature;
+///   it carries no fields.
+pub fn read_todos(state: &TodoState, _request: TodoReadRequest) -> String {
+    let todos = state.todos.read();
+
+    if todos.is_empty() {
+        return "No tasks.".to_string();
+    }
+
+    let mut output = format!("Tasks ({} total):\n", todos.len());
+    for todo in todos.iter() {
+        let _ = writeln!(
+            output,
+            "{} ({:?}) {}: {}",
+            todo.status.icon(),
+            todo.priority,
+            todo.id,
+            todo.content
+        );
+    }
+
+    output.truncate(output.trim_end().len());
+    output
+}
+
+/// Replaces the current task list with new items.
+///
+/// Validates that all todos have non-empty id and content.
+///
+/// # Arguments
+/// - `state`: Shared state whose task list is replaced by the new items.
+/// - `request`: Request carrying the new list of todos to store.
+///
+/// # Errors
+/// - Returns [`ToolError::Validation`] when any task has an empty or whitespace-only `id`.
+/// - Returns [`ToolError::Validation`] when any task has empty or whitespace-only `content`.
+pub fn write_todos(state: &TodoState, request: TodoWriteRequest) -> ToolResult<String> {
+    for todo in &request.todos {
+        if todo.id.trim().is_empty() {
+            return Err(ToolError::validation_for(
+                "todos",
+                "todo id cannot be empty",
+            ));
+        }
+        if todo.content.trim().is_empty() {
+            return Err(ToolError::validation_for(
+                "todos",
+                "todo content cannot be empty",
+            ));
+        }
+    }
+
+    let count = request.todos.len();
+    *state.todos.write() = request.todos;
+    Ok(format!("Updated todo list with {count} task(s)."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    fn make_todo(id: &str, status: TodoStatus) -> Todo {
+        Todo {
+            id: id.to_string(),
+            content: format!("Task {id}"),
+            status,
+            priority: TodoPriority::Medium,
+        }
+    }
+
+    /// Verifies that write_todos rejects todos with empty id or content.
+    #[rstest]
+    #[case::empty_id("", "Task", "id")]
+    #[case::empty_content("1", "  ", "content")]
+    fn write_validates_required_fields(
+        #[case] id: &str,
+        #[case] content: &str,
+        #[case] _field_name: &str,
+    ) {
+        let state = TodoState::new();
+        let todo = Todo {
+            id: id.to_string(),
+            content: content.to_string(),
+            status: TodoStatus::Pending,
+            priority: TodoPriority::Low,
+        };
+        let result = write_todos(&state, TodoWriteRequest { todos: vec![todo] });
+        assert!(matches!(result, Err(ToolError::Validation { .. })));
+    }
+
+    /// Verifies that each status variant returns the correct icon string.
+    #[rstest]
+    #[case::pending(TodoStatus::Pending, "[ ]")]
+    #[case::in_progress(TodoStatus::InProgress, "[>]")]
+    #[case::completed(TodoStatus::Completed, "[x]")]
+    #[case::cancelled(TodoStatus::Cancelled, "[-]")]
+    fn status_icons(#[case] status: TodoStatus, #[case] expected: &str) {
+        assert_eq!(status.icon(), expected);
+    }
+
+    #[test]
+    fn write_and_read_todos() {
+        let state = TodoState::new();
+
+        let todos = vec![
+            make_todo("1", TodoStatus::Completed),
+            make_todo("2", TodoStatus::InProgress),
+            make_todo("3", TodoStatus::Pending),
+        ];
+
+        let result = write_todos(&state, TodoWriteRequest { todos }).unwrap();
+        assert!(result.contains("3 task(s)"));
+
+        let output = read_todos(&state, TodoReadRequest {});
+        assert!(output.contains("[x]"));
+        assert!(output.contains("[>]"));
+        assert!(output.contains("[ ]"));
+    }
+
+    #[test]
+    fn read_empty_list() {
+        let state = TodoState::new();
+        let output = read_todos(&state, TodoReadRequest {});
+        assert_eq!(output, "No tasks.");
+    }
+
+    #[test]
+    fn write_replaces_existing() {
+        let state = TodoState::new();
+
+        write_todos(
+            &state,
+            TodoWriteRequest {
+                todos: vec![make_todo("a", TodoStatus::Pending)],
+            },
+        )
+        .unwrap();
+        write_todos(
+            &state,
+            TodoWriteRequest {
+                todos: vec![make_todo("b", TodoStatus::Completed)],
+            },
+        )
+        .unwrap();
+
+        let output = read_todos(&state, TodoReadRequest {});
+        assert!(!output.contains("Task a"));
+        assert!(output.contains("Task b"));
+    }
+
+    #[test]
+    fn status_serde_roundtrip() {
+        let json = serde_json::to_string(&TodoStatus::InProgress).unwrap();
+        assert_eq!(json, "\"in_progress\"");
+        let parsed: TodoStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, TodoStatus::InProgress);
+    }
+}

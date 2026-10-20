@@ -31,6 +31,7 @@ fn run_rustc_version(root: &Path, target: &Target) -> Option<String> {
         .arg("--version")
         .env("RUSTUP_HOME", prefix::rustup_home(root))
         .env("CARGO_HOME", prefix::cargo_home(root))
+        .env("RUSTUP_AUTO_UPDATE", "0")
         .output()
         .ok()?;
     if !output.status.success() {
@@ -82,7 +83,9 @@ impl super::component::Component for RustupComponent {
             .arg("minimal")
             .arg("--default-toolchain")
             .arg(RUST_TOOLCHAIN)
-            .arg("--no-self-update")
+            // Current rustup-init removed the old --no-self-update
+            // flag; RUSTUP_AUTO_UPDATE=0 is its successor.
+            .env("RUSTUP_AUTO_UPDATE", "0")
             .env("RUSTUP_HOME", &rustup_home)
             .env("CARGO_HOME", &cargo_home)
             .status()

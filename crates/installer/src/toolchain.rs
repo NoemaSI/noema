@@ -106,6 +106,9 @@ impl Toolchain {
             ("PATH".to_string(), path),
             ("RUSTUP_HOME".to_string(), prefix::rustup_home(&self.root).into_os_string()),
             ("CARGO_HOME".to_string(), prefix::cargo_home(&self.root).into_os_string()),
+            // The managed toolchain is pinned; rustup must never
+            // self-update beneath it.
+            ("RUSTUP_AUTO_UPDATE".to_string(), OsString::from("0")),
         ]
     }
 
@@ -183,7 +186,7 @@ mod tests {
         let toolchain = Toolchain::with_root(dir.path()).unwrap();
         let overlay = toolchain.env_overlay();
         let keys: Vec<&str> = overlay.iter().map(|(k, _)| k.as_str()).collect();
-        assert_eq!(keys, ["PATH", "RUSTUP_HOME", "CARGO_HOME"]);
+        assert_eq!(keys, ["PATH", "RUSTUP_HOME", "CARGO_HOME", "RUSTUP_AUTO_UPDATE"]);
         let path = overlay
             .iter()
             .find(|(k, _)| k == "PATH")

@@ -41,6 +41,11 @@ pub trait Fetcher {
 /// Production fetcher: plain HTTPS GET with redirect following.
 pub struct HttpFetcher;
 
+/// Largest asset we ever download (rumoca's Windows build is ~56 MB),
+/// with generous headroom. ureq's `read_to_vec` defaults to a 10 MB
+/// body limit, which would reject every one of our binaries.
+const MAX_DOWNLOAD_BYTES: u64 = 128 * 1024 * 1024;
+
 impl Fetcher for HttpFetcher {
     fn fetch(&self, url: &str) -> anyhow::Result<Vec<u8>> {
         let mut response = ureq::get(url)
@@ -51,6 +56,8 @@ impl Fetcher for HttpFetcher {
             .with_context(|| format!("GET {url}"))?;
         let bytes = response
             .body_mut()
+            .with_config()
+            .limit(MAX_DOWNLOAD_BYTES)
             .read_to_vec()
             .with_context(|| format!("reading body of {url}"))?;
         Ok(bytes)

@@ -27,8 +27,12 @@ COPY . .
 RUN cargo test --release && cargo build --release
 
 FROM debian:bookworm-slim AS runtime
+# gcc + libc6-dev: the native linker/compiler rustc needs to build
+# plugin code. Without them the prereq check (correctly) warns that
+# this machine cannot compile — on a real host the user installs them
+# via their package manager, in the container we bake them in.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/target/release/noema-setup /usr/local/bin/noema-setup
 

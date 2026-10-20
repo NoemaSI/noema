@@ -8,6 +8,11 @@ use crate::env::{
 
 mod env;
 
+pub mod detect;
+pub mod prefix;
+pub mod state;
+pub mod toolchain;
+
 pub const NOEMA_CONFIG_FILE: &str = "config.json";
 pub const NOEMA_CONFIG_SYSTEMMAP_FOLDER: &str = "smap";
 

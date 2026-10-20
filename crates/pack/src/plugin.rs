@@ -101,15 +101,22 @@ pub(crate) fn skill_rlib() -> Option<PathBuf> {
     find_rlib("libskill-")
 }
 
-pub(crate) fn rustc() -> String {
-    std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string())
+/// The `rustc` to compile plugins with: an explicit `$RUSTC` wins,
+/// then the managed toolchain's rustc (with its environment overlay,
+/// so the rustup shim resolves the pinned toolchain), then `rustc`
+/// on `PATH` (development machines).
+pub(crate) fn rustc_command() -> Command {
+    if let Some(compiler) = std::env::var_os("RUSTC") {
+        return Command::new(compiler);
+    }
+    noema_config::toolchain::command("rustc")
 }
 
 pub(crate) fn rustc_version() -> &'static str {
     static VERSION: OnceLock<String> = OnceLock::new();
 
     VERSION.get_or_init(|| {
-        Command::new(rustc())
+        rustc_command()
             .arg("--version")
             .output()
             .map(|output| {
@@ -146,9 +153,8 @@ const GLUE: &[u8] = b"\n\n// ---- appended by skill::plugin (do not edit) ----\n
     }\n";
 
 pub(crate) fn compile(glue: &Path, rlib: &Path, out: &Path, crate_name: &str) -> Result<()> {
-    let compiler = rustc();
-
-    let mut command = Command::new(&compiler);
+    let mut command = rustc_command();
+    let compiler = command.get_program().to_string_lossy().into_owned();
 
     command
         .arg(glue)

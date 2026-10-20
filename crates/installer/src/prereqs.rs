@@ -42,25 +42,55 @@ fn command_exists(program: &str, args: &[&str]) -> bool {
 }
 
 fn check_unix_cc() -> PrereqReport {
-    for cc in ["cc", "clang", "gcc"] {
-        if command_exists(cc, &["--version"]) {
-            return PrereqReport {
-                ok: true,
-                notes: vec![format!("found native compiler: {cc}")],
-            };
-        }
+    let cc_found = ["cc", "clang", "gcc"].into_iter().find(|cc| command_exists(cc, &["--version"]));
+    let Some(cc) = cc_found else {
+        return PrereqReport {
+            ok: false,
+            notes: vec![
+                "no native C compiler/linker found (cc, clang, gcc)".to_string(),
+                "Noema compiles plugin code with rustc, which needs one.".to_string(),
+                "install it, e.g.:".to_string(),
+                "  Debian/Ubuntu: sudo apt install build-essential".to_string(),
+                "  Fedora:        sudo dnf install gcc".to_string(),
+                "  Arch:          sudo pacman -S base-devel".to_string(),
+            ],
+        };
+    };
+    let mut notes = vec![format!("found native compiler: {cc}")];
+    let cpp_found = ["c++", "clang++", "g++"]
+        .into_iter()
+        .any(|cpp| command_exists(cpp, &["--version"]));
+    if !cpp_found {
+        notes.push(
+            "WARNING: no C++ compiler found (c++, clang++, g++) — building Noema from source \
+             needs one (Debian/Ubuntu: sudo apt install build-essential)."
+                .to_string(),
+        );
     }
-    PrereqReport {
-        ok: false,
-        notes: vec![
-            "no native C compiler/linker found (cc, clang, gcc)".to_string(),
-            "Noema compiles plugin code with rustc, which needs one.".to_string(),
-            "install it, e.g.:".to_string(),
-            "  Debian/Ubuntu: sudo apt install build-essential".to_string(),
-            "  Fedora:        sudo dnf install gcc".to_string(),
-            "  Arch:          sudo pacman -S base-devel".to_string(),
-        ],
+    notes.extend(check_linux_openssl());
+    PrereqReport { ok: true, notes }
+}
+
+/// The Noema source build compiles `openssl-sys`, which needs
+/// pkg-config and OpenSSL development headers on Linux. Warn (but do
+/// not fail) when they are missing — the build would stop later with a
+/// far less actionable message.
+fn check_linux_openssl() -> Option<String> {
+    if !command_exists("pkg-config", &["--version"]) {
+        return Some(
+            "WARNING: pkg-config not found — the Noema build needs it plus OpenSSL headers \
+             (Debian/Ubuntu: sudo apt install pkg-config libssl-dev)."
+                .to_string(),
+        );
     }
+    if !command_exists("pkg-config", &["--modversion", "openssl"]) {
+        return Some(
+            "WARNING: OpenSSL development headers not found — the Noema build needs them \
+             (Debian/Ubuntu: sudo apt install libssl-dev)."
+                .to_string(),
+        );
+    }
+    None
 }
 
 fn check_macos_command_line_tools() -> PrereqReport {

@@ -16,9 +16,10 @@
 use crate::detect::Target;
 
 /// Rust toolchain installed through rustup (minimal profile). Must
-/// stay at or above the stable release required by the workspace
-/// edition (edition 2024 => 1.85).
-pub const RUST_TOOLCHAIN: &str = "1.89.0";
+/// stay at or above the workspace's own MSRV *and* the highest MSRV of
+/// its locked dependencies (the aws-sdk stack requires 1.94.1+);
+/// pinned to the stable release the workspace is developed against.
+pub const RUST_TOOLCHAIN: &str = "1.99.1";
 
 /// Pinned Pixi release.
 pub const PIXI_VERSION: &str = "0.82.0";

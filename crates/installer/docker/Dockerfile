@@ -20,19 +20,26 @@
 # To test another distro or architecture, change the base images
 # below and rebuild.
 
-FROM rust:1.89-slim-bookworm AS build
+FROM rust:1.99-slim-bookworm AS build
 WORKDIR /src
 COPY . .
 # Offline unit/integration tests: synthetic binaries, zero network.
 RUN cargo test --release && cargo build --release
 
 FROM debian:bookworm-slim AS runtime
-# gcc + libc6-dev: the native linker/compiler rustc needs to build
-# plugin code. Without them the prereq check (correctly) warns that
-# this machine cannot compile — on a real host the user installs them
-# via their package manager, in the container we bake them in.
+# System build dependencies for compiling Noema in this container
+# (derived from the workspace's -sys crates):
+#   build-essential      cc + c++ (aws-lc-sys, zstd-sys, plugin compiles)
+#   pkg-config libssl-dev  openssl-sys / native-tls
+#   libfontconfig1-dev libfreetype-dev  gpui text stack
+#   libclang-dev         bindgen-driven build scripts
+#   cmake                aws-lc-sys / onnx build scripts
+# On a real host the user installs the equivalent via their package
+# manager; the prereq check warns about the core pieces up front.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates gcc libc6-dev \
+    && apt-get install -y --no-install-recommends \
+       build-essential pkg-config libssl-dev libfontconfig1-dev libfreetype-dev \
+       libclang-dev cmake ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/target/release/noema-setup /usr/local/bin/noema-setup
 

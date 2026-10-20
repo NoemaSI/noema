@@ -54,17 +54,25 @@ impl Target {
 }
 
 /// Run `<path> --version` and return the raw combined output, if the
-/// executable exists and exits successfully.
+/// executable exists and exits successfully. One retry: transient
+/// spawn failures (fork pressure, EMFILE) must not look like a
+/// missing installation.
 pub fn probe_output(path: &Path) -> Option<String> {
-    let output = Command::new(path).arg("--version").output().ok()?;
-    if !output.status.success() {
-        return None;
+    for attempt in 0..2 {
+        match Command::new(path).arg("--version").output() {
+            Ok(output) if output.status.success() => {
+                let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+                if text.trim().is_empty() {
+                    text = String::from_utf8_lossy(&output.stderr).into_owned();
+                }
+                return Some(text);
+            }
+            Ok(_) => return None,
+            Err(_) if attempt == 0 => continue,
+            Err(_) => return None,
+        }
     }
-    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
-    if text.trim().is_empty() {
-        text = String::from_utf8_lossy(&output.stderr).into_owned();
-    }
-    Some(text)
+    None
 }
 
 /// Extract the version token from a `--version` line, e.g.

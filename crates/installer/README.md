@@ -40,7 +40,7 @@ host.
 
 | Component | Version | Source | Verified by |
 | --- | --- | --- | --- |
-| Rust toolchain | 1.89.0 (minimal profile) | static.rust-lang.org | official `rustup-init*.sha256` |
+| Rust toolchain | 1.99.1 (minimal profile) | static.rust-lang.org | official `rustup-init*.sha256` |
 | Pixi | 0.82.0 | prefix-dev GitHub release | release `.sha256` / asset digests |
 | Rumoca | 0.9.20 | CogniPilot GitHub release (prebuilt binaries, newer than crates.io) | release-page sha256 digests |
 | Noema | `main` @ `NoemaSI/noema` (built from source) | GitHub source archive | commit resolved via API, digest recorded |
@@ -52,6 +52,12 @@ Upgrading a component = one version bump + one checksum refresh in
 Windows ARM64: rust + pixi install normally; rumoca publishes no
 `aarch64-windows` binary, so that component reports `unavailable`
 instead of guessing.
+
+System requirements for the *source build* (the components above are
+self-contained binaries): Linux — `build-essential`, `pkg-config`,
+`libssl-dev`, `libfontconfig1-dev`, `libfreetype-dev`, `libclang-dev`,
+`cmake`; macOS — Xcode Command Line Tools; Windows — Visual Studio
+Build Tools with the C++ workload.
 
 ## The `noema` component (source build)
 
@@ -98,24 +104,35 @@ noema-setup uninstall [--prefix DIR] [--yes]
 
 ## Library use (for other Noema crates)
 
-The managed binaries are launched by absolute path — never off `PATH`:
+The resolver lives in the small `noema-config` crate (the installer
+re-exports it as `installer::toolchain`), so app crates get path
+resolution without pulling in the installer's download stack. The
+Noema app (`pack`, `modelica`) launches every managed tool through
+one helper, which uses the managed binary by absolute path plus its
+environment overlay (`PATH`, `RUSTUP_HOME`, `CARGO_HOME`,
+`RUSTUP_AUTO_UPDATE`):
 
 ```rust
-use installer::toolchain::Toolchain;
-
-let toolchain = Toolchain::discover()?; // same resolution order as --prefix
-let mut command = std::process::Command::new(toolchain.pixi()?);
+let mut command = noema_config::toolchain::command("pixi");
 command.args(["run", "python", "fit.py"]);
-for (key, value) in toolchain.env_overlay() {
-    command.env(key, value); // PATH + RUSTUP_HOME + CARGO_HOME overlays
-}
 ```
 
-If a component is missing the resolver returns
-`` `pixi` is not installed in <root> — run `noema-setup` first `` rather
-than silently falling back to a system binary. (Wiring `pack`'s
-`Command::new("pixi"/"rumoca")` call sites onto this API is a planned
-follow-up.)
+Logical names: `pixi`, `rumoca`, `rustc`, `cargo`, `rustup`, `ui`,
+`pack`. The strict entry point — used when a missing component must
+be an error instead of a `PATH` fallback — is still available:
+
+```rust
+use noema_config::toolchain::Toolchain;
+
+let toolchain = Toolchain::discover()?; // same resolution order as --prefix
+let pixi = toolchain.pixi()?; // errors: `pixi` is not installed in
+                              // <root> — run `noema-setup` first
+```
+
+On a development machine with no managed installation,
+`toolchain::command` prints a one-time warning and falls back to the
+bare name on `PATH` (an explicit `$RUSTC` always wins), so `cargo run
+-p pack` keeps working there.
 
 ## Testing without touching your machine
 

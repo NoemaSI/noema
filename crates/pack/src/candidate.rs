@@ -296,7 +296,8 @@ fn cache_dir(source: &[u8], name: &str) -> PathBuf {
     let tag = RUNTIME_TAG.get_or_init(|| {
         // Mix the rumoca version into the key so a toolchain upgrade
         // never reuses stale artifacts.
-        std::process::Command::new("rumoca")
+        let mut command = noema_config::toolchain::command("rumoca");
+        command
             .arg("--version")
             .output()
             .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())

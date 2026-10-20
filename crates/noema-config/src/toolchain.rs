@@ -1,24 +1,24 @@
 //! Resolve the managed executables from library code.
 //!
-//! This is what other Noema crates should use instead of spawning
-//! bare `pixi` / `rumoca` off the `PATH`:
+//! This is what the Noema app uses instead of spawning bare `pixi` /
+//! `rumoca` off the `PATH`. The one-liner for any spawn site:
 //!
 //! ```no_run
-//! use installer::toolchain::Toolchain;
-//!
-//! let toolchain = Toolchain::discover()?;
-//! let pixi = toolchain.pixi()?;
-//! let mut command = std::process::Command::new(pixi);
+//! let mut command = noema_config::toolchain::command("pixi");
 //! command.args(["run", "python", "fit.py"]);
-//! for (key, value) in toolchain.env_overlay() {
-//!     command.env(key, value);
-//! }
-//! # Ok::<(), installer::toolchain::ToolchainError>(())
 //! ```
+//!
+//! When the managed toolchain is installed, the command runs its
+//! absolute binary path with the environment overlay (PATH,
+//! `RUSTUP_HOME`, `CARGO_HOME`, …). On a development machine without
+//! one, the command is left as a plain `PATH` lookup and a one-time
+//! warning is printed.
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::OnceLock;
 
 use thiserror::Error;
 
@@ -29,9 +29,11 @@ use crate::state::State;
 #[derive(Debug, Error)]
 pub enum ToolchainError {
     #[error("`{component}` is not installed in {} — run `noema-setup` first", root.display())]
-    MissingComponent { component: &'static str, root: PathBuf },
+    MissingComponent { component: String, root: PathBuf },
     #[error("`{component}` is recorded at {path} but that file is not executable there")]
-    BinaryGone { component: &'static str, path: PathBuf },
+    BinaryGone { component: String, path: PathBuf },
+    #[error("unknown managed binary '{0}'")]
+    UnknownBinary(String),
     #[error(transparent)]
     State(#[from] anyhow::Error),
 }
@@ -61,46 +63,60 @@ impl Toolchain {
         Ok(Toolchain { root, target, components: state.components })
     }
 
+    /// Absolute path of a managed logical binary: `pixi`, `rumoca`,
+    /// `rustc`, `cargo`, `rustup`, `ui`, `pack`.
+    pub fn binary(&self, name: &str) -> Result<PathBuf, ToolchainError> {
+        let dir = match name {
+            "pixi" => prefix::pixi_bin(&self.root),
+            "rumoca" => prefix::rumoca_bin(&self.root),
+            "rustc" | "cargo" | "rustup" => prefix::cargo_bin(&self.root),
+            "ui" | "pack" => prefix::noema_bin(&self.root),
+            other => return Err(ToolchainError::UnknownBinary(other.to_string())),
+        };
+        self.resolve(name, &dir, name)
+    }
+
     pub fn pixi(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("pixi", &prefix::pixi_bin(&self.root), "pixi")
+        self.binary("pixi")
     }
 
     pub fn rumoca(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("rumoca", &prefix::rumoca_bin(&self.root), "rumoca")
+        self.binary("rumoca")
     }
 
     pub fn rustc(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("rustc", &crate::rust::cargo_bin(&self.root), "rustc")
+        self.binary("rustc")
     }
 
     pub fn cargo(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("cargo", &crate::rust::cargo_bin(&self.root), "cargo")
+        self.binary("cargo")
     }
 
     pub fn rustup(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("rustup", &crate::rust::cargo_bin(&self.root), "rustup")
+        self.binary("rustup")
     }
 
     /// The built `ui` binary from the managed noema install.
     pub fn ui(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("ui", &crate::noema::noema_bin(&self.root), "ui")
+        self.binary("ui")
     }
 
     /// The built `pack` binary from the managed noema install.
     pub fn pack(&self) -> Result<PathBuf, ToolchainError> {
-        self.resolve("pack", &crate::noema::noema_bin(&self.root), "pack")
+        self.binary("pack")
     }
 
     /// Environment overlay for spawning any managed executable:
     /// prepends the managed bin directories to `PATH` and sets
     /// `RUSTUP_HOME`/`CARGO_HOME` so the rustup shims resolve the
     /// managed toolchain no matter what the ambient environment says.
+    /// Also the environment Rumoca needs to drive `cargo` internally.
     pub fn env_overlay(&self) -> Vec<(String, OsString)> {
         let managed_bins = [
-            crate::rust::cargo_bin(&self.root),
+            prefix::cargo_bin(&self.root),
             prefix::pixi_bin(&self.root),
             prefix::rumoca_bin(&self.root),
-            crate::noema::noema_bin(&self.root),
+            prefix::noema_bin(&self.root),
         ];
         let mut path = OsString::new();
         for (i, dir) in managed_bins.iter().enumerate() {
@@ -123,11 +139,19 @@ impl Toolchain {
         ]
     }
 
+    /// Apply the environment overlay to `command` (use together with a
+/// program obtained from [`Toolchain::binary`]).
+pub fn apply_env(&self, command: &mut Command) {
+        for (key, value) in self.env_overlay() {
+            command.env(key, value);
+        }
+    }
+
     /// The recorded path for a logical binary, falling back to the
     /// conventional managed location when `state.json` predates or
     /// lacks an entry. A path that does not exist is an error — the
     /// caller must not silently fall back to the system `PATH`.
-    fn resolve(&self, logical: &'static str, dir: &Path, name: &str) -> Result<PathBuf, ToolchainError> {
+    fn resolve(&self, logical: &str, dir: &Path, name: &str) -> Result<PathBuf, ToolchainError> {
         let candidate = self
             .components
             .get(logical)
@@ -137,11 +161,53 @@ impl Toolchain {
         if candidate.is_file() {
             Ok(candidate)
         } else if self.components.contains_key(logical) {
-            Err(ToolchainError::BinaryGone { component: logical, path: candidate })
+            Err(ToolchainError::BinaryGone { component: logical.to_string(), path: candidate })
         } else {
-            Err(ToolchainError::MissingComponent { component: logical, root: self.root.clone() })
+            Err(ToolchainError::MissingComponent {
+                component: logical.to_string(),
+                root: self.root.clone(),
+            })
         }
     }
+}
+
+/// Create a [`Command`] for a managed logical binary (`pixi`,
+/// `rumoca`, …) with the environment overlay applied. Without an
+/// installation the command falls back to the bare name (plain `PATH`
+/// lookup) so development machines keep working; the reason is
+/// printed once per process to keep probe loops quiet.
+///
+/// ```no_run
+/// let mut command = noema_config::toolchain::command("pixi");
+/// command.args(["run", "python", "fit.py"]);
+/// ```
+pub fn command(name: &str) -> Command {
+    match Toolchain::discover() {
+        Ok(toolchain) => match toolchain.binary(name) {
+            Ok(path) => {
+                let mut command = Command::new(path);
+                toolchain.apply_env(&mut command);
+                command
+            }
+            Err(error) => {
+                warn_fallback(name, &error);
+                Command::new(name)
+            }
+        },
+        Err(error) => {
+            warn_fallback(name, &error);
+            Command::new(name)
+        }
+    }
+}
+
+fn warn_fallback(name: &str, error: &ToolchainError) {
+    static WARNED: OnceLock<()> = OnceLock::new();
+    WARNED.get_or_init(|| {
+        eprintln!(
+            "noema: managed toolchain unavailable ({error}); falling back to `{name}` on PATH"
+        );
+    });
 }
 
 #[cfg(test)]
@@ -154,6 +220,16 @@ mod tests {
         let toolchain = Toolchain::with_root(dir.path()).unwrap();
         let error = toolchain.pixi().unwrap_err();
         assert!(error.to_string().contains("run `noema-setup` first"));
+    }
+
+    #[test]
+    fn unknown_binary_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let toolchain = Toolchain::with_root(dir.path()).unwrap();
+        assert!(matches!(
+            toolchain.binary("vim"),
+            Err(ToolchainError::UnknownBinary(_))
+        ));
     }
 
     #[test]
@@ -176,7 +252,7 @@ mod tests {
             "pixi",
             crate::state::Installed {
                 version: "0.82.0".into(),
-                binaries: [(logical("pixi"), ghost.clone())].into_iter().collect(),
+                binaries: [("pixi".to_string(), ghost.clone())].into_iter().collect(),
                 sha256: "x".repeat(64),
                 installed_at: 0,
             },
@@ -187,8 +263,27 @@ mod tests {
         assert!(matches!(error, ToolchainError::BinaryGone { .. }), "{error}");
     }
 
-    fn logical(name: &str) -> String {
-        name.to_string()
+    #[test]
+    fn apply_env_overlays_managed_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let pixi = prefix::pixi_bin(root).join("pixi");
+        std::fs::create_dir_all(pixi.parent().unwrap()).unwrap();
+        std::fs::write(&pixi, b"#!/bin/sh\n").unwrap();
+
+        let toolchain = Toolchain::with_root(root).unwrap();
+        let mut command = Command::new(toolchain.pixi().unwrap());
+        toolchain.apply_env(&mut command);
+        assert_eq!(command.get_program(), pixi);
+        let env: Vec<(String, String)> = command
+            .get_envs()
+            .filter_map(|(key, value)| {
+                Some((key.to_string_lossy().into_owned(), value?.to_string_lossy().into_owned()))
+            })
+            .collect();
+        let keys: Vec<&str> = env.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(keys.contains(&"RUSTUP_HOME"), "{keys:?}");
+        assert!(keys.contains(&"RUSTUP_AUTO_UPDATE"), "{keys:?}");
     }
 
     #[test]

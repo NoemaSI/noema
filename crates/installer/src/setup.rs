@@ -288,13 +288,14 @@ mod tests {
             let fake = |name: &str, version: &str| -> Vec<u8> {
                 format!("#!/bin/sh\necho \"{name} {version}\"\n").into_bytes()
             };
-            let rustup_init = br#"#!/bin/sh
+            let rustup_init = format!(
+                r#"#!/bin/sh
 # Minimal rustup-init stand-in: creates the shim layout and exits.
 test "$1" = "-y" || exit 2
 mkdir -p "$CARGO_HOME/bin"
 cat > "$CARGO_HOME/bin/tool" <<'EOF'
 #!/bin/sh
-if [ "$1" = "--version" ]; then echo "rustc 1.89.0 (faked 2025-08-14)"; exit 0; fi
+if [ "$1" = "--version" ]; then echo "rustc {rust} (faked 2025-08-14)"; exit 0; fi
 prev=""
 for a in "$@"; do
     if [ "$prev" = "-p" ]; then
@@ -311,7 +312,10 @@ for tool in rustup rustc cargo; do
     chmod +x "$CARGO_HOME/bin/$tool"
 done
 exit 0
-"#.to_vec();
+"#,
+                rust = crate::manifest::RUST_TOOLCHAIN
+            )
+            .into_bytes();
             let app_zip = build_zip(
                 "noema-main",
                 &[("Cargo.toml", "# noema workspace\n"), ("crates/pack/Cargo.toml", "[package]\n")],
@@ -376,11 +380,11 @@ exit 0
         assert_eq!(state.components["noema"].version, STUB_SHA);
 
         // The binaries exist where the resolver expects them.
-        assert!(crate::rust::cargo_bin(&root).join("rustc").is_file());
+        assert!(prefix::cargo_bin(&root).join("rustc").is_file());
         assert!(prefix::pixi_bin(&root).join("pixi").is_file());
         assert!(prefix::rumoca_bin(&root).join("rumoca").is_file());
-        assert!(crate::noema::noema_bin(&root).join("ui").is_file());
-        assert!(crate::noema::noema_bin(&root).join("pack").is_file());
+        assert!(prefix::noema_bin(&root).join("ui").is_file());
+        assert!(prefix::noema_bin(&root).join("pack").is_file());
 
         // The sources landed where the resolver expects them.
         assert!(crate::noema::app_dir(&root).join("Cargo.toml").is_file());

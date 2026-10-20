@@ -177,8 +177,9 @@ pub fn compile(
         "rumoca compile --target casadi-mx {mo_file}"
     );
 
+    let mut process = noema_config::toolchain::command("rumoca");
     let output = spawn(
-        Command::new("rumoca")
+        process
             .current_dir(project_dir)
             .args(["compile", "--target", "casadi-mx", mo_file]),
     )?;
@@ -271,8 +272,9 @@ print(json.dumps({
             )
         })?;
 
+    let mut process = noema_config::toolchain::command("pixi");
     let output = spawn(
-        Command::new("pixi")
+        process
             .current_dir(workspace_root())
             .arg("run")
             .arg("python")
@@ -528,7 +530,7 @@ print(json.dumps({"states": states, "algebraics": algebraics}))
                 )
             })?;
 
-        let mut command = Command::new("pixi");
+        let mut command = noema_config::toolchain::command("pixi");
 
         command
             .current_dir(workspace_root())
@@ -838,7 +840,7 @@ print(json.dumps({"states": states, "algebraics": algebraics}))
                 )
             })?;
 
-        let mut command = Command::new("pixi");
+        let mut command = noema_config::toolchain::command("pixi");
 
         command
             .current_dir(workspace_root())

@@ -57,6 +57,16 @@ pub fn rumoca_bin(root: &Path) -> PathBuf {
     root.join("rumoca").join("bin")
 }
 
+/// Directory holding the rustup shims (rustc, cargo, rustup).
+pub fn cargo_bin(root: &Path) -> PathBuf {
+    cargo_home(root).join("bin")
+}
+
+/// Directory holding the Noema binaries built by the installer.
+pub fn noema_bin(root: &Path) -> PathBuf {
+    root.join("noema").join("bin")
+}
+
 /// Download cache; populated during setup, pruned when a full setup
 /// succeeds.
 pub fn downloads(root: &Path) -> PathBuf {

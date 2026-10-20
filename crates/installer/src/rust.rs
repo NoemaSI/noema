@@ -7,7 +7,7 @@
 //! `<root>/rust/cargo/bin/` and need `RUSTUP_HOME` set when invoked.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -21,12 +21,8 @@ use crate::state::Installed;
 
 pub struct RustupComponent;
 
-pub fn cargo_bin(root: &Path) -> PathBuf {
-    prefix::cargo_home(root).join("bin")
-}
-
 fn run_rustc_version(root: &Path, target: &Target) -> Option<String> {
-    let rustc = managed_binary(&cargo_bin(root), "rustc", target);
+    let rustc = managed_binary(&prefix::cargo_bin(root), "rustc", target);
     let output = Command::new(&rustc)
         .arg("--version")
         .env("RUSTUP_HOME", prefix::rustup_home(root))
@@ -95,7 +91,7 @@ impl super::component::Component for RustupComponent {
 
         let mut binaries = BTreeMap::new();
         for name in ["rustup", "rustc", "cargo"] {
-            let path = managed_binary(&cargo_bin(ctx.root), name, &ctx.target);
+            let path = managed_binary(&prefix::cargo_bin(ctx.root), name, &ctx.target);
             anyhow::ensure!(path.is_file(), "rustup-init did not produce {}", path.display());
             binaries.insert(name.to_string(), path);
         }

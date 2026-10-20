@@ -32,10 +32,6 @@ pub fn app_dir(root: &Path) -> PathBuf {
     root.join("src").join("app")
 }
 
-pub fn noema_bin(root: &Path) -> PathBuf {
-    root.join("noema").join("bin")
-}
-
 /// Resolve a branch, tag or sha to an exact 40-char commit sha, so a
 /// `main` build is still reproducible and idempotent.
 pub fn resolve_ref(fetcher: &dyn crate::download::Fetcher, repo: &str, ref_name: &str) -> Result<String> {
@@ -130,7 +126,7 @@ impl crate::component::Component for NoemaComponent {
 
         // 2. Build with the managed toolchain.
         let cargo = managed_binary(
-            &crate::rust::cargo_bin(ctx.root),
+            &prefix::cargo_bin(ctx.root),
             "cargo",
             &ctx.target,
         );
@@ -164,7 +160,7 @@ impl crate::component::Component for NoemaComponent {
                 .join("release")
                 .join(format!("{package}{}", ctx.target.exe_suffix()));
             anyhow::ensure!(built.is_file(), "build produced no {package} binary");
-            let destination = managed_binary(&noema_bin(ctx.root), package, &ctx.target);
+            let destination = managed_binary(&prefix::noema_bin(ctx.root), package, &ctx.target);
             crate::download::install_binary(&built, &destination)?;
             binaries.insert(package.to_string(), destination);
         }

@@ -21,7 +21,7 @@
 //! binding harness keeps working.
 
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Result, anyhow};
 use serde_json::json;
@@ -106,7 +106,8 @@ pub fn fit(
         "experiments": experiments_json,
     });
 
-    let mut child = Command::new("pixi")
+    let mut command = noema_config::toolchain::command("pixi");
+    let mut child = command
         .current_dir(crate::workspace_root())
         .arg("run")
         .arg("python")

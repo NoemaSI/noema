@@ -11,8 +11,6 @@
 //! and is attached to the theorist's and the referee's prompts as an
 //! image. Axis labels come from the pack's lexicon.
 
-use std::process::Command;
-
 use anyhow::{Context, Result};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -634,7 +632,8 @@ fn render_png(spec: &PlotSpec) -> Result<Vec<u8>> {
     std::fs::write(&spec_path, serde_json::to_string(spec)?)
         .context("writing plot spec")?;
 
-    let output = Command::new("pixi")
+    let mut command = noema_config::toolchain::command("pixi");
+    let output = command
         .current_dir(crate::workspace_root())
         .args(["run", "python", "-c", MATPLOTLIB_SCRIPT])
         .arg(&spec_path)

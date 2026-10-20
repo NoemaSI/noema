@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
+# The installer bootstraps machines; it is deliberately a standalone
+# workspace so it builds without the other crates' external path
+# dependencies (and inside minimal containers). See crates/installer.
+exclude = ["crates/installer"]
 
 [workspace.dependencies]
 anyhow = "1.0.104"

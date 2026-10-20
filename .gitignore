@@ -11,3 +11,6 @@
 deps/
 .noema/
 packs/**
+
+# Standalone installer workspace build artifacts
+crates/installer/target/

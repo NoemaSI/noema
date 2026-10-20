@@ -1,8 +1,12 @@
-# Build the noema-setup binary from the workspace, then run a full
-# hermetic setup inside the container. Nothing touches the host: the
-# toolchain lives in the /toolchain volume only.
+# Build the noema-setup binary and run a full hermetic setup inside
+# the container. Nothing touches the host: the toolchain lives in the
+# /toolchain volume only.
 #
-#   docker build -f crates/installer/docker/Dockerfile -t noema-setup .
+# The installer is a standalone cargo workspace (no dependency on the
+# main noema workspace or its external path deps), so the build
+# context is just crates/installer:
+#
+#   docker build -f crates/installer/docker/Dockerfile -t noema-setup crates/installer
 #
 # The build stage runs the *offline* test suite (stubbed fetcher, no
 # network). Setup + verify run when you start the container:
@@ -13,14 +17,14 @@
 #   docker run --rm -it -v noema-toolchain:/toolchain \
 #     --entrypoint /bin/sh noema-setup
 #
-# To test another distro or architecture, change the two base images
-# below (e.g. --build-arg RUNTIME=ubuntu:24.04) and rebuild.
+# To test another distro or architecture, change the base images
+# below and rebuild.
 
 FROM rust:1.89-slim-bookworm AS build
 WORKDIR /src
 COPY . .
 # Offline unit/integration tests: synthetic binaries, zero network.
-RUN cargo test --release -p installer
+RUN cargo test --release && cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \

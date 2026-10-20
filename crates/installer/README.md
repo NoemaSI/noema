@@ -96,10 +96,11 @@ Two layers, no host side effects:
 # 1. Offline unit + integration tests (synthetic stub binaries, zero
 #    network): covers install, checksum-mismatch rejection, idempotent
 #    re-run, dry-run writes nothing, state round-trip, resolver.
-cargo test -p installer
+#    The installer is a standalone workspace, so run cargo inside it:
+cd crates/installer && cargo test --release
 
 # 2. Real end-to-end, fully containerised:
-docker build -f crates/installer/docker/Dockerfile -t noema-setup .
+docker build -f crates/installer/docker/Dockerfile -t noema-setup crates/installer
 docker run --rm -v noema-toolchain:/toolchain noema-setup setup --dry-run
 docker run --rm -v noema-toolchain:/toolchain noema-setup setup
 docker run --rm -v noema-toolchain:/toolchain noema-setup verify
